@@ -23,6 +23,8 @@
 // @match        https://rs.boadmin.org/ru/Users/Summary*
 // @match        https://kt.boadmin.org/ru/Users/Summary*
 // @match        https://ak.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -1087,3 +1089,4 @@
 
     window.addEventListener('load', init);
 })();
+
