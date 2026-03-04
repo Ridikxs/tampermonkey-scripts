@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         HideStatsRiv
+// @name         HideStats
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Скрывает платежи, реквизит и не нужную информацию для операторов
-// @author       River
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideStats.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideStats.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -83,5 +85,6 @@
 
     // Ждем 2 секунды, чтобы страница прогрузила все данные
     setTimeout(init, 2000);
+
 
 })();
