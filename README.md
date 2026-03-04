@@ -22,12 +22,12 @@
 | **Cashback** | Подсчет кэшбэка с доп. информацией | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback.user.js) |
 | **Copydep** | Утилита для быстрого копирования депозитов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Copydep.user.js) |
 | **CopyWithdraws** | Утилита для копирования выводов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopyWithdraws.user.js) |
-| **CopCashRiv** | Копирование данных с приоритетом статусов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js) |
-| **AnalyzerRiv** | Исправления поиска, кнопок и фильтров | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/AnalyzerRiv.user.js) |
-| **BonusCopyRiv** | Быстрое копирование инфо о бонусах | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/BonusCopyRiv.user.js) |
-| **FastBirthdayRiver** | Настраиваемое поздравление с ДР | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastBirthdayRiver.user.js) |
+| **CopCash** | Копирование данных с приоритетом статусов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js) |
+| **Analyzer** | Исправления поиска, кнопок и фильтров | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/AnalyzerRiv.user.js) |
+| **BonusCopy** | Быстрое копирование инфо о бонусах | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/BonusCopyRiv.user.js) |
+| **FastBirthday** | Настраиваемое поздравление с ДР | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastBirthdayRiver.user.js) |
 | **FastProf** | Управление полем "Данные клиента" | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastProf.user.js) |
-| **HideStatsRiv** | Скрытие лишней инфо и реквизитов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideStatsRiv.user.js) |
+| **HideStats** | Скрытие лишней инфо и реквизитов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideStatsRiv.user.js) |
 | **HideTag** | Умное скрытие тегов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideTag.user.js) |
 | **LiveChat Timer** | Исправленный таймер для LiveChat | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatTimer.user.js) |
 | **Notes Linkifier** | Кликабельные ссылки в Quick Notes | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js) |
@@ -35,9 +35,9 @@
 | **SumDepRiv Test** | Подсчет успешных депозитов | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SumDepRivTest.user.js) |
 | **Time in seconds** | Стабильная синхронизация времени LC | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TimeInSecondsLiveChat.user.js) |
 | **Transfer Chat** | Полу-авто перевод чатов в VIP | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TransferChatToVIPTest.user.js) |
-| **X3CoolRiv** | Точное округление до копейки | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/X3CoolRiv.user.js) |
+| **X3Cool** | Точное округление до копейки | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/X3CoolRiv.user.js) |
 | **МСК-Time** | МСК время рядом с UTC в навбаре | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/MSK-Time.user.js) |
-| **AlarmclockRiv** | Скрипт-будильник (Тест) | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/AlarmclockRiv.user.js) |
+| **Alarmclock** | Скрипт-будильник | [Установить](https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/AlarmclockRiv.user.js) |
 
 ---
 
