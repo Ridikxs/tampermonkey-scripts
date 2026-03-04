@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         FastBirthdayRiver
+// @name         FastBirthday
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  Формирует сообщение с возможностью настройки текста под себя.
-// @author       Calvin / Gemini
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastBirthday.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastBirthday.user.js
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -145,4 +147,5 @@
 
     new MutationObserver(inject).observe(document.body, { childList: true, subtree: true });
     inject();
+
 })();
