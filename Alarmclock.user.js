@@ -1,9 +1,11 @@
 // ==UserScript==
-// @name         AlarmclockRiv Тест
+// @name         Alarmclock
 // @namespace    http://tampermonkey.net/
 // @version      1.1
 // @author       River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Alarmclock.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Alarmclock.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -207,4 +209,5 @@
 
     setInterval(inject, 3000);
     setInterval(check, 5000);
+
 })();
