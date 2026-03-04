@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         FastProfRivТест
+// @name         FastProf
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      2.0
 // @description  Исправлено: кнопка "Данные клиента" управляет показом поля и не исчезает
-// @author       River
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastProf.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/FastProf.user.js
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -119,4 +121,5 @@
 
     // Проверяем наличие интерфейса каждые 500мс для надежности
     setInterval(inject, 500);
+
 })();
