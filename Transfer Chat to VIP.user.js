@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name         Transfer Chat to VIP Тест
+// @name         Transfer Chat to VIP
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      2.0
 // @description  Полу-автоматический перевод чатов (с сохранением структуры). Добавлены TG группы.
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TransferChatToVIP.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TransferChatToVIP.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -252,4 +254,5 @@
     }
 
     observeMenu();
+
 })();
