@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopCashRiv
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Копирование данных с учетом приоритета статусов (HighRoll > VIP > PreVIP)
 // @author       River
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -24,6 +24,8 @@
 // @match        https://rs.boadmin.org/ru/Users/Summary*
 // @match        https://kt.boadmin.org/ru/Users/Summary*
 // @match        https://ak.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -105,4 +107,5 @@
             init();
         }
     }, 2000);
+
 })();
