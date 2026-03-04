@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Копирование информации о бонусе
-// @author       River
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/*
 // @match        https://backoffice.*.casino/ru/Users/*
 // @match        https://*.boadmin.org/ru/Users/*
@@ -140,6 +140,7 @@
     }, 1000);
 
 })();
+
 
 
 
