@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FastBirthday
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Формирует сообщение с возможностью настройки текста под себя.
 // @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
@@ -149,3 +149,4 @@
     inject();
 
 })();
+
