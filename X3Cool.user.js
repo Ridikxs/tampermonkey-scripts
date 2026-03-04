@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         X3CoolRiv Тест
+// @name         X3Cool
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      2.0
 // @description  Исправлена точность округления до копейки
-// @author       River
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/X3Cool.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/X3Cool.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -108,4 +110,5 @@
     }
 
     setInterval(addCalcInterface, 2000);
+
 })();
