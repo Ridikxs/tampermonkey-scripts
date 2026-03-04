@@ -24,6 +24,8 @@
 // @match        https://rs.boadmin.org/ru/Users/Summary*
 // @match        https://kt.boadmin.org/ru/Users/Summary*
 // @match        https://ak.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopyWithdraws.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopyWithdraws.user.js
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -186,3 +188,4 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 })();
+
