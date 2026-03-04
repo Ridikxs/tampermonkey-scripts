@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopyWithdraws
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      2.0
 // @description  Утилита для копирования выводов.
 // @author       Calvin
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -188,4 +188,5 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 })();
+
 
