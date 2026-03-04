@@ -24,8 +24,8 @@
 // @match        https://rs.boadmin.org/ru/Users/Summary*
 // @match        https://kt.boadmin.org/ru/Users/Summary*
 // @match        https://ak.boadmin.org/ru/Users/Summary*
-// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCashRiv.user.js
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCash.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CopCash.user.js
 // @grant        GM_setClipboard
 // ==/UserScript==
 
@@ -109,3 +109,4 @@
     }, 2000);
 
 })();
+
