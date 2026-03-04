@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         МСК-Time
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Показывает время по МСК рядом с UTC в навбаре
-// @author       Calvin
+// @author       Calvin/River
 // @match        https://www2.fundist.org/*
 // @match        https://www7.fundist.org/*
 // @match        https://backoffice.r7.casino/*
@@ -24,6 +24,8 @@
 // @match        https://rs.boadmin.org/*
 // @match        https://kt.boadmin.org/*
 // @match        https://ak.boadmin.org/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/MSK-Time.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/MSK-Time.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -111,4 +113,5 @@
         const el = document.querySelector('#WelcomeTimeMSK');
         if (el && el.__mskInterval) clearInterval(el.__mskInterval);
     });
+
 })();
