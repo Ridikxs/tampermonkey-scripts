@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Копирование данных с учетом приоритета статусов (HighRoll > VIP > PreVIP)
-// @author       River
+// @author       Calvin/River
 // @match        https://www2.fundist.org/ru/Users/Summary*
 // @match        https://www7.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.r7.casino/ru/Users/Summary*
@@ -109,4 +109,5 @@
     }, 2000);
 
 })();
+
 
