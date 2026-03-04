@@ -1,12 +1,14 @@
 // ==UserScript==
-// @name         SumDepRiv Тест
+// @name         SumDep
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      2.0
 // @description  Посчитать успешные депозиты
-// @author       River
+// @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SumDep.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SumDep.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -111,4 +113,5 @@
 
     // Запуск проверки чаще, так как админки часто "лениво" подгружают элементы
     setInterval(injectInterface, 1000);
+
 })();
