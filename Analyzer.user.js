@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         AnalyzerRiv
+// @name         Analyzer
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  Исправлен поиск проекта, серые кнопки, старт в свернутом виде, фильтр .casino
@@ -266,3 +266,4 @@
     setInterval(init, 1000);
 
 })();
+
