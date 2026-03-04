@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopCash
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.9
 // @description  Копирование данных с учетом приоритета статусов (HighRoll > VIP > PreVIP)
 // @author       Calvin/River
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -109,6 +109,7 @@
     }, 2000);
 
 })();
+
 
 
 
