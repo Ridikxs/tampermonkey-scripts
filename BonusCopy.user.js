@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BonusCopy
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Копирование информации о бонусе
 // @author       River
 // @match        https://*.fundist.org/ru/Users/*
@@ -140,3 +140,4 @@
     }, 1000);
 
 })();
+
