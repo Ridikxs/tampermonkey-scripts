@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Analyzer
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Исправлен поиск проекта, серые кнопки, старт в свернутом виде, фильтр .casino
 // @author       River
 // @match        https://my.livechatinc.com/*
@@ -266,4 +266,5 @@
     setInterval(init, 1000);
 
 })();
+
 
