@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Подсчитывает Cashback c доп информацией для оператора.
-// @author       Calvin
+// @author       Calvin/River
 // @match        https://www2.fundist.org/ru/Users/Summary*
 // @match        https://www7.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.r7.casino/ru/Users/Summary*
@@ -1089,6 +1089,7 @@
 
     window.addEventListener('load', init);
 })();
+
 
 
 
