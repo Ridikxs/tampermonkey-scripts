@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Copydep
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      2.0
 // @description  Утилита для копирования депов.
 // @author       Calvin
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -237,3 +237,4 @@
     });
 
 })();
+
