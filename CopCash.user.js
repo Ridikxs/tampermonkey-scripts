@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         CopCashRiv
+// @name         CopCash
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Копирование данных с учетом приоритета статусов (HighRoll > VIP > PreVIP)
@@ -109,5 +109,6 @@
     }, 2000);
 
 })();
+
 
 
