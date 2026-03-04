@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name         LiveChat Timer Тест
+// @name         LiveChat Timer
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      2.0
 // @description  Исправлено смещение таймера при переходе в настройки.
-// @author       Calvin / River
+// @author       Calvin/River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatTimer.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatTimer.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -222,4 +224,5 @@
     const obs = new MutationObserver(() => injectButtons());
     obs.observe(document.body, { childList: true, subtree: true });
     injectButtons();
+
 })();
