@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Исправлен поиск проекта, серые кнопки, старт в свернутом виде, фильтр .casino
-// @author       River
+// @author       Calvin/River
 // @match        https://my.livechatinc.com/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Analyzer.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Analyzer.user.js
@@ -266,5 +266,6 @@
     setInterval(init, 1000);
 
 })();
+
 
 
