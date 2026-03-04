@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         BonusCopyRiv
+// @name         BonusCopy
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  Копирование информации о бонусе
@@ -7,6 +7,8 @@
 // @match        https://*.fundist.org/ru/Users/*
 // @match        https://backoffice.*.casino/ru/Users/*
 // @match        https://*.boadmin.org/ru/Users/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/BonusCopy.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/BonusCopy.user.js
 // @grant        GM_setClipboard
 // @run-at       document-end
 // ==/UserScript==
@@ -136,4 +138,5 @@
         saveUserData();
         injectButtons();
     }, 1000);
+
 })();
