@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Notes Linkifier
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Делает только веб-ссылки в Quick Notes кликабельными
-// @author       Calvin
+// @author       Calvin/River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -64,5 +66,6 @@
 
     // Делаем первый запуск на случай, если страница уже загрузилась
     makeLinksClickable();
+
 
 })();
