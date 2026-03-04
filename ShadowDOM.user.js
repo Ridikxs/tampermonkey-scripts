@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name         ShadowDOMriv
+// @name         ShadowDOM
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      2.0
 // @description  Панель с поддержкой темной темы #202024
-// @author       River
+// @author       Calvin/River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ShadowDOM.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ShadowDOM.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -205,4 +207,5 @@
     }
 
     setInterval(init, 1000);
+
 })();
