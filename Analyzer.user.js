@@ -5,6 +5,8 @@
 // @description  Исправлен поиск проекта, серые кнопки, старт в свернутом виде, фильтр .casino
 // @author       River
 // @match        https://my.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Analyzer.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Analyzer.user.js
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
@@ -262,4 +264,5 @@
     }
 
     setInterval(init, 1000);
+
 })();
