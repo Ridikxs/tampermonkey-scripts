@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Notes Linkifier
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Делает только веб-ссылки в Quick Notes кликабельными
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
@@ -81,3 +81,4 @@
     observer.observe(document.body, { childList: true, subtree: true });
     linkify();
 })();
+
