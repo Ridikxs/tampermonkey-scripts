@@ -13,59 +13,71 @@
 (function() {
     'use strict';
 
-    // Шаблон для поиска веб-ссылок (исключаем HTML-теги вроде <br>)
     const urlRegex = /(https?:\/\/[^\s<]+)/g;
 
-    function makeLinksClickable() {
-        // Находим все заголовки h5
-        const headers = document.querySelectorAll('h5');
+    function linkify() {
+        // Выбираем только элементы, где реально лежит текст сообщения
+        const elements = document.querySelectorAll('p, .css-0, .css-3irqw0');
 
-        headers.forEach(header => {
-            // Ищем блок "Quick Notes"
-            if (header.textContent.trim() === 'Quick Notes') {
+        elements.forEach(el => {
+            // Пропускаем: если уже есть ссылка, если это заголовок или если поле ввода
+            if (el.querySelector('a') || el.closest('header') || el.isContentEditable) return;
 
-                // Ищем родительскую карточку (поднимаемся на 4 уровня вверх по структуре HTML)
-                const card = header.parentElement.parentElement.parentElement.parentElement;
+            // Работаем через перебор текстовых узлов, чтобы не задеть HTML-разметку
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            const nodesToReplace = [];
 
-                if (card) {
-                    // Ищем все абзацы с текстом в этой карточке
-                    const paragraphs = card.querySelectorAll('p');
-
-                    paragraphs.forEach(p => {
-                        // Важная проверка: если внутри абзаца ЕЩЕ НЕТ ссылки (тега <a>)
-                        if (!p.querySelector('a')) {
-                            let html = p.innerHTML;
-                            let isModified = false;
-
-                            // 1. Превращаем URL в синие ссылки
-                            if (urlRegex.test(html)) {
-                                html = html.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #007bff; text-decoration: underline; cursor: pointer; font-weight: bold;">$1</a>');
-                                isModified = true;
-                            }
-
-                            // Если мы нашли и заменили текст, обновляем содержимое абзаца
-                            if (isModified) {
-                                p.innerHTML = html;
-                            }
-                        }
-                    });
+            while (node = walker.nextNode()) {
+                if (urlRegex.test(node.nodeValue)) {
+                    nodesToReplace.push(node);
                 }
             }
+
+            nodesToReplace.forEach(textNode => {
+                const parent = textNode.parentNode;
+                if (!parent || parent.tagName === 'A') return;
+
+                const content = textNode.nodeValue;
+                const fragment = document.createDocumentFragment();
+                let lastIndex = 0;
+                let match;
+
+                urlRegex.lastIndex = 0;
+                while ((match = urlRegex.exec(content)) !== null) {
+                    // Текст до ссылки
+                    fragment.appendChild(document.createTextNode(content.slice(lastIndex, match.index)));
+
+                    // Сама ссылка
+                    const a = document.createElement('a');
+                    a.href = match[0].trim();
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                    a.textContent = match[0];
+                    // Стили: синий цвет, жирный, перенос длинных строк
+                    Object.assign(a.style, {
+                        color: "#007bff",
+                        textDecoration: "underline",
+                        fontWeight: "bold",
+                        wordBreak: "break-all"
+                    });
+
+                    fragment.appendChild(a);
+                    lastIndex = urlRegex.lastIndex;
+                }
+                // Текст после ссылки
+                fragment.appendChild(document.createTextNode(content.slice(lastIndex)));
+                parent.replaceChild(fragment, textNode);
+            });
         });
     }
 
-    // Запускаем наблюдатель, который следит за интерфейсом каждую миллисекунду
+    let timeout;
     const observer = new MutationObserver(() => {
-        makeLinksClickable();
+        clearTimeout(timeout);
+        timeout = setTimeout(linkify, 150);
     });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    // Делаем первый запуск на случай, если страница уже загрузилась
-    makeLinksClickable();
-
-
+    observer.observe(document.body, { childList: true, subtree: true });
+    linkify();
 })();
