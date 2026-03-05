@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Notes Linkifier
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Делает только веб-ссылки в Quick Notes кликабельными
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
