@@ -8,6 +8,8 @@
     "Всячина": { "color": "#c9c036", "bg": "#ffe3e3" }
   },
   "files": {
+    "tags.json": ["Всячина"]
+    "README.md": ["Всячина"]
     "TransferChatToVIP.user.js": ["LiveChat"],
     "X3Cool.user.js": ["Fundist"],
     "Alarmclock.user.js": ["LiveChat"],
@@ -27,6 +29,6 @@
     "ShadowDOM.user.js": ["LiveChat"],
     "SumDep.user.js": ["Fundist"],
     "МСК-Time.user.js": ["Fundist"],
-    "TimeInSecondsLiveChat.user.js": ["LiveChat"]
+    "TimeInSecondsLiveChat.user.js": ["LiveChat"] 
   }
 }
