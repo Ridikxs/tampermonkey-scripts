@@ -6,8 +6,8 @@
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
 // @match        https://app.helpdesk.com/*
-// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Notes%20Linkifier.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Notes%20Linkifier.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -82,5 +82,6 @@
     observer.observe(document.body, { childList: true, subtree: true });
     linkify();
 })();
+
 
 
