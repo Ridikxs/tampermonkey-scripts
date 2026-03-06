@@ -1,8 +1,10 @@
 {
-  "colors": {
+"colors": {
     "LiveChat": { "color": "#cc5200", "bg": "#ffe6d5" },
     "Fundist": { "color": "#0047b3", "bg": "#e6f0ff" },
-    "Helpdesk": { "color": "#006622", "bg": "#e6ffe6" }
+    "Helpdesk": { "color": "#006622", "bg": "#e6ffe6" },
+    "ChatWood": { "color": "#5243aa", "bg": "#eae6ff" },
+    "NK": { "color": "#c92a2a", "bg": "#ffe3e3" }
   },
   "files": {
     "TransferChatToVIP.user.js": ["LiveChat"],
