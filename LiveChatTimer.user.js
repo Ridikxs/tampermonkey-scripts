@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LiveChatTimer
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Исправлено смещение таймера при переходе в настройки.
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
@@ -226,5 +226,6 @@
     injectButtons();
 
 })();
+
 
 
