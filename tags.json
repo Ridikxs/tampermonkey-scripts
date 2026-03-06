@@ -1,0 +1,26 @@
+{
+  "colors": {
+    "LiveChat": { "color": "#cc5200", "bg": "#ffe6d5" },
+    "Fundist": { "color": "#0047b3", "bg": "#e6f0ff" },
+    "Helpdesk": { "color": "#006622", "bg": "#e6ffe6" }
+  },
+  "files": {
+    "Alarmclock.user.js": ["LiveChat"],
+    "Analyzer.user.js": ["LiveChat"],
+    "BonusCopy.user.js": ["Fundist"],
+    "Cashback.user.js": ["Fundist"],
+    "CopCash.user.js": ["Fundist"],
+    "CopyWithdraws.user.js": ["Fundist"],
+    "Copydep.user.js": ["Fundist"],
+    "FastBirthday.user.js": ["Fundist"],
+    "FastProf.user.js": ["Fundist"],
+    "HideStats.user.js": ["Fundist"],
+    "HideTag.user.js": ["Fundist"],
+    "LiveChatTimer.user.js": ["LiveChat"],
+    "NotesLinkifier.user.js": ["LiveChat", "Helpdesk"],
+    "QuickLink.user.js": ["Fundist"],
+    "ShadowDOM.user.js": ["LiveChat"],
+    "SumDep.user.js": ["Fundist"],
+    "TimeInSecondsLiveChat.user.js": ["LiveChat"]
+  }
+}
