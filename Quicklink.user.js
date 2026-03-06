@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Quick link
+// @name         Quicklink
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Закрепление ссылок в карте клиента(Локально).
 // @author       Calvin/River
 // @match        *://*.fundist.org/*
@@ -144,4 +144,5 @@
 
     // Первичный запуск
     renderAll();
+
 })();
