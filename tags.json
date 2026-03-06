@@ -5,6 +5,7 @@
     "Helpdesk": { "color": "#006622", "bg": "#e6ffe6" },
     "ChatWood": { "color": "#5243aa", "bg": "#eae6ff" },
     "NK": { "color": "#c92a2a", "bg": "#ffe3e3" }
+    "Всячина": { "color": "#c9c036", "bg": "#ffe3e3" }
   },
   "files": {
     "TransferChatToVIP.user.js": ["LiveChat"],
