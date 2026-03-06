@@ -5,6 +5,8 @@
     "Helpdesk": { "color": "#006622", "bg": "#e6ffe6" }
   },
   "files": {
+    "TransferChatToVIP.user.js": ["LiveChat"],
+    "X3Cool.user.js": ["Fundist"],
     "Alarmclock.user.js": ["LiveChat"],
     "Analyzer.user.js": ["LiveChat"],
     "BonusCopy.user.js": ["Fundist"],
@@ -21,6 +23,7 @@
     "QuickLink.user.js": ["Fundist"],
     "ShadowDOM.user.js": ["LiveChat"],
     "SumDep.user.js": ["Fundist"],
+    "МСК-Time.user.js": ["Fundist"],
     "TimeInSecondsLiveChat.user.js": ["LiveChat"]
   }
 }
