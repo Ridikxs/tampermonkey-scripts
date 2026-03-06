@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         LiveChat Timer
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Исправлено смещение таймера при переходе в настройки.
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
-// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatTimer.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatTimer.user.js
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChat%20Timer.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChat%20Timer.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -226,3 +226,4 @@
     injectButtons();
 
 })();
+
