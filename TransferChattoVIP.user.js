@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Transfer Chat to VIP
+// @name         TransferChattoVIP
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Полу-автоматический перевод чатов (с сохранением структуры). Добавлены TG группы.
@@ -256,3 +256,4 @@
     observeMenu();
 
 })();
+
