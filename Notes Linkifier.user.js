@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Notes Linkifier
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Делает только веб-ссылки в Quick Notes кликабельными
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
+// @match        https://app.helpdesk.com/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NotesLinkifier.user.js
 // @grant        none
@@ -81,4 +82,5 @@
     observer.observe(document.body, { childList: true, subtree: true });
     linkify();
 })();
+
 
