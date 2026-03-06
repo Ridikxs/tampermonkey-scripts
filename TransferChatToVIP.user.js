@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TransferChattoVIP
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Полу-автоматический перевод чатов (с сохранением структуры). Добавлены TG группы.
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
@@ -256,4 +256,5 @@
     observeMenu();
 
 })();
+
 
