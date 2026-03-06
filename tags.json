@@ -7,7 +7,7 @@
     "NK": { "color": "#c92a2a", "bg": "#ffe3e3" }
   },
   "files": {
-    "TransferChatToVIP.user.js": ["ChatWood"],
+    "TransferChatToVIP.user.js": ["LiveChat"],
     "X3Cool.user.js": ["Fundist"],
     "Alarmclock.user.js": ["LiveChat"],
     "Analyzer.user.js": ["LiveChat"],
