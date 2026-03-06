@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Time in seconds LiveChat
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Исправлены настройки и сохранение. Стабильная синхронизация.
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
@@ -191,3 +191,4 @@
     setInterval(processChats, 500);
 
 })();
+
