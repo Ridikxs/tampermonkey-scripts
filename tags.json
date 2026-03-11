@@ -22,6 +22,7 @@
     "HideTag.user.js": ["Fundist"],
     "LiveChatTimer.user.js": ["LiveChat"],
     "NotesLinkifier.user.js": ["LiveChat", "Helpdesk"],
+    "HelpDesk24h.user.js": ["Helpdesk"],
     "QuickLink.user.js": ["Fundist"],
     "ShadowDOM.user.js": ["LiveChat"],
     "SumDep.user.js": ["Fundist"],
