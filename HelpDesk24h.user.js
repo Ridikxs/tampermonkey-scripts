@@ -6,6 +6,8 @@
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
 // @match        https://app.helpdesk.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HelpDesk24h.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HelpDesk24h.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -67,4 +69,5 @@
 
     // Первичный запуск
     formatDates();
+
 })();
