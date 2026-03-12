@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Cashback2
 // @namespace    http://tampermonkey.net/
-// @version      2.6
-// @description  Подсчитывает Cashback c доп информацией.
+// @version      2.7
+// @description  Подсчитывает Cashback c доп информацией. Добавлен выбор 1 дня и спец. календарь для Arkada.
 // @author       Calvin
 // @match        *://*.fundist.org/*
 // @match        *://backoffice.r7.casino/*
@@ -47,21 +47,36 @@
         return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
     }
 
-    function getLastWeekDates() {
+    function getLastWeekDates(projName) {
         const today = new Date();
-        const dayOfWeek = today.getDay() || 7;
         today.setHours(0, 0, 0, 0);
-        const lastSunday = new Date(today);
-        lastSunday.setDate(today.getDate() - dayOfWeek);
-        const lastMonday = new Date(lastSunday);
-        lastMonday.setDate(lastSunday.getDate() - 6);
+
         const format = (date) => {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
-        return { from: format(lastMonday), to: format(lastSunday) };
+
+        if (projName === 'Arkada') {
+            const daysToLastSaturday = today.getDay() + 1;
+            const lastSaturday = new Date(today);
+            lastSaturday.setDate(today.getDate() - daysToLastSaturday);
+
+            const lastSunday = new Date(lastSaturday);
+            lastSunday.setDate(lastSaturday.getDate() - 6);
+
+            return { from: format(lastSunday), to: format(lastSaturday) };
+        } else {
+            const dayOfWeek = today.getDay() || 7;
+            const lastSunday = new Date(today);
+            lastSunday.setDate(today.getDate() - dayOfWeek);
+
+            const lastMonday = new Date(lastSunday);
+            lastMonday.setDate(lastSunday.getDate() - 6);
+
+            return { from: format(lastMonday), to: format(lastSunday) };
+        }
     }
 
     function parseEurValue(text) {
@@ -92,25 +107,51 @@
         };
     }
 
-    function createUI(targetContainer) {
+    function createUI(targetContainer, projName) {
         if (!targetContainer) return;
         const div = document.createElement("div");
         div.id = "cashback-window";
         div.style.marginTop = "30px";
         div.innerHTML = `
             <h3 id="cashback-title">Cashback</h3>
-            <div>
-                <input type="date" id="fromDate"> ➔
-                <input type="date" id="toDate">
-                <button id="calculateBtn">Рассчитать КБ</button>
+            <div style="margin-bottom: 12px; font-size: 14px; color: #334155;">
+                <label style="margin-right: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                    <input type="radio" name="cbDateMode" value="range" checked> <span>За период</span>
+                </label>
+                <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                    <input type="radio" name="cbDateMode" value="single"> <span>За один день</span>
+                </label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <input type="date" id="fromDate" style="padding: 3px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <span id="dateSeparator" style="color: #64748b;">➔</span>
+                <input type="date" id="toDate" style="padding: 3px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <button id="calculateBtn" style="padding: 4px 12px; cursor: pointer; border-radius: 4px; border: 1px solid #cbd5e1; background: #f8fafc;">Рассчитать КБ</button>
             </div>
             <p id="cashback-result">Ожидание расчёта...</p>
         `;
         targetContainer.appendChild(div);
 
-        const { from, to } = getLastWeekDates();
-        document.getElementById('fromDate').value = from;
-        document.getElementById('toDate').value = to;
+        const { from, to } = getLastWeekDates(projName);
+        const fromDateEl = document.getElementById('fromDate');
+        const toDateEl = document.getElementById('toDate');
+        const separatorEl = document.getElementById('dateSeparator');
+
+        fromDateEl.value = from;
+        toDateEl.value = to;
+
+        const radios = document.querySelectorAll('input[name="cbDateMode"]');
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'single') {
+                    toDateEl.style.display = 'none';
+                    separatorEl.style.display = 'none';
+                } else {
+                    toDateEl.style.display = 'inline-block';
+                    separatorEl.style.display = 'inline-block';
+                }
+            });
+        });
 
         document.getElementById('calculateBtn').addEventListener('click', startCalculation);
     }
@@ -164,9 +205,13 @@
             statusColor = 'green';
         }
 
+        const periodText = (selectedFromDate === selectedToDate)
+            ? `<b>${selectedFromDate}</b>`
+            : `<b>${selectedFromDate} – ${selectedToDate}</b>`;
+
         resultElement.innerHTML = `
             <div style="font-size: 16px; margin-bottom: 10px;">
-                📅 Расчёт за период: <b>${selectedFromDate} – ${selectedToDate}</b>
+                📅 Расчёт за период: ${periodText}
             </div>
             <b style="color:blue; font-size: 14px;">Ставок с реального баланса: ${normalCashback.toFixed(2)}</b>
             <br><br>
@@ -238,9 +283,17 @@
     }
 
     function startCalculation() {
+        const modeElement = document.querySelector('input[name="cbDateMode"]:checked');
+        const mode = modeElement ? modeElement.value : 'range';
+
         const fromInput = document.getElementById('fromDate').value;
-        const toInput = document.getElementById('toDate').value;
-        if (!fromInput || !toInput) return alert("Выбери обе даты!");
+        let toInput = document.getElementById('toDate').value;
+
+        if (mode === 'single') {
+            toInput = fromInput;
+        }
+
+        if (!fromInput || !toInput) return alert("Выбери даты!");
 
         selectedFromDate = formatDate(fromInput);
         selectedToDate = formatDate(toInput);
@@ -1054,8 +1107,9 @@
                 userId = newUserId;
                 localStorage.setItem("SummaryUserId", userId);
 
-                createUI(targetContainer);
                 projectName = detectProject() || 'Неизвестно';
+
+                createUI(targetContainer, projectName);
                 showConditionsForProject(projectName);
 
                 log("✅ Калькулятор загружен для клиента:", userId, "| Проект:", projectName);
