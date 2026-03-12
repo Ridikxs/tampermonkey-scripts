@@ -1,28 +1,19 @@
 // ==UserScript==
 // @name         Cashback2
 // @namespace    http://tampermonkey.net/
-// @version      2.4
-// @description  Подсчитывает Cashback c доп информацией для оператора.
+// @version      2.6
+// @description  Подсчитывает Cashback c доп информацией.
 // @author       Calvin
-// @match        https://www2.fundist.org/ru/Users/Summary*
-// @match        https://www7.fundist.org/ru/Users/Summary*
-// @match        https://backoffice.r7.casino/ru/Users/Summary*
-// @match        https://backoffice.catcasino.com/ru/Users/Summary*
-// @match        https://backoffice.gama.casino/ru/Users/Summary*
-// @match        https://backoffice.daddy.casino/ru/Users/Summary*
-// @match        https://backoffice.mers.casino/ru/Users/Summary*
-// @match        https://backoffice.kent.casino/ru/Users/Summary*
-// @match        https://backoffice.kometa.casino/ru/Users/Summary*
-// @match        https://www9.fundist.org/ru/Users/Summary*
-// @match        https://backoffice.arkada.casino/ru/Users/Summary*
-// @match        https://cc.boadmin.org/ru/Users/Summary*
-// @match        https://gm.boadmin.org/ru/Users/Summary*
-// @match        https://dy.boadmin.org/ru/Users/Summary*
-// @match        https://mr.boadmin.org/ru/Users/Summary*
-// @match        https://kn.boadmin.org/ru/Users/Summary*
-// @match        https://rs.boadmin.org/ru/Users/Summary*
-// @match        https://kt.boadmin.org/ru/Users/Summary*
-// @match        https://ak.boadmin.org/ru/Users/Summary*
+// @match        *://*.fundist.org/*
+// @match        *://backoffice.r7.casino/*
+// @match        *://backoffice.catcasino.com/*
+// @match        *://backoffice.gama.casino/*
+// @match        *://backoffice.daddy.casino/*
+// @match        *://backoffice.mers.casino/*
+// @match        *://backoffice.kent.casino/*
+// @match        *://backoffice.kometa.casino/*
+// @match        *://backoffice.arkada.casino/*
+// @match        *://*.boadmin.org/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback2.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback2.user.js
 // @run-at       document-idle
@@ -38,6 +29,7 @@
     let selectedToDate = '';
     let projectName = 'Проект';
     let userId = null;
+    let currentUserId = null;
 
     function log(...args) {
         console.log('[CB]', ...args);
@@ -90,6 +82,7 @@
 
         const psDeposits = parse('dd[name="col-PaymentSystemDepositsDd"]');
         const manualDeposits = parse('dd[name="col-DepositDd"]');
+
         const psWithdrawals = parse('dd[name="col-PaymentSystemWithdrawalsDd"]');
         const manualWithdrawals = parse('dd[name="col-WithdrawDd"]');
 
@@ -99,9 +92,8 @@
         };
     }
 
-    function createUI() {
-        const target = document.querySelector("#UserSummaryWrapper > div.summary-blocks > div.summary-block-left") || document.body;
-        if (!target) return;
+    function createUI(targetContainer) {
+        if (!targetContainer) return;
         const div = document.createElement("div");
         div.id = "cashback-window";
         div.style.marginTop = "30px";
@@ -114,7 +106,7 @@
             </div>
             <p id="cashback-result">Ожидание расчёта...</p>
         `;
-        target.appendChild(div);
+        targetContainer.appendChild(div);
 
         const { from, to } = getLastWeekDates();
         document.getElementById('fromDate').value = from;
@@ -260,14 +252,6 @@
         fetchCashback(true);
     }
 
-    function getUserId() {
-        const el = document.querySelector("#SummaryUserId");
-        if (el) {
-            userId = el.textContent.trim();
-            localStorage.setItem("SummaryUserId", userId);
-        }
-    }
-
     function addCashbackBlock(html, id = '') {
         const container = document.getElementById("cashback-window");
         if (!container || document.getElementById(id)) return;
@@ -320,7 +304,6 @@
             Kometa: 'Мин. проигрыш: 5 EUR / 500 RUB | Доступен с: 1 LVL | 2+ LVL Мин. проигрыш 101 EUR / 10 000 RUB '
         };
 
-        // ... (HTML строки остались без изменений, я сохранил их полностью как ты просил)
         const infoMap = {
             Catcasino: `
                 <section class="cat-cb" style="font-family:Inter,Arial,sans-serif;max-width:820px;margin:18px auto;padding:18px;border-radius:10px; box-shadow:0 6px 22px rgba(0,0,0,0.08);background:#fff;border:1px solid #eef2f6;">
@@ -1051,31 +1034,37 @@
         }
     }
 
-    // --- НОВАЯ ЛОГИКА ЗАПУСКА ДЛЯ SPA ---
     function watchForPage() {
         setInterval(() => {
-            // Если мы не на странице Summary - ничего не делаем
             if (!window.location.href.includes('/Users/Summary')) return;
 
             const targetEl = document.querySelector("#SummaryUserId");
+            if (!targetEl) return;
+
+            const newUserId = targetEl.textContent.trim();
             const uiExists = document.getElementById("cashback-window");
 
-            // Если ID пользователя появился, а нашего интерфейса еще нет
-            if (targetEl && !uiExists) {
-                getUserId();
-                createUI();
+            const targetContainer = document.querySelector("#UserSummaryWrapper > div.summary-blocks > div.summary-block-left") || document.querySelector(".summary-block-left");
+
+            if (targetContainer && (!uiExists || currentUserId !== newUserId)) {
+
+                if (uiExists) uiExists.remove();
+
+                currentUserId = newUserId;
+                userId = newUserId;
+                localStorage.setItem("SummaryUserId", userId);
+
+                createUI(targetContainer);
                 projectName = detectProject() || 'Неизвестно';
                 showConditionsForProject(projectName);
-                setupNgrToggle();
-                log("✅ Калькулятор кэшбэка загружен. Проект:", projectName);
+
+                log("✅ Калькулятор загружен для клиента:", userId, "| Проект:", projectName);
             }
-        }, 1000); // Проверяем страницу каждую секунду
+
+            setupNgrToggle();
+
+        }, 1000);
     }
 
-    // Запускаем наблюдатель вместо ожидания загрузки страницы
     watchForPage();
-
-})();
-
-    window.addEventListener('load', init);
 })();
