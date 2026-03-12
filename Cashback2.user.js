@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cashback2
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Подсчитывает Cashback c доп информацией для оператора.
 // @author       Calvin
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -25,6 +25,7 @@
 // @match        https://ak.boadmin.org/ru/Users/Summary*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback2.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Cashback2.user.js
+// @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 
@@ -87,11 +88,8 @@
             return el ? parseEurValue(el.textContent) : 0;
         };
 
-        // Собираем ПС + Ручные депозиты
         const psDeposits = parse('dd[name="col-PaymentSystemDepositsDd"]');
         const manualDeposits = parse('dd[name="col-DepositDd"]');
-
-        // Собираем ПС + Ручные выводы
         const psWithdrawals = parse('dd[name="col-PaymentSystemWithdrawalsDd"]');
         const manualWithdrawals = parse('dd[name="col-WithdrawDd"]');
 
@@ -138,7 +136,6 @@
 
         const realWithoutLive = normalCashback - liveCashback;
 
-        // Карта минимальных проигрышей для каждого проекта
         const minLossMap = {
             Catcasino: 5000,
             Arkada: 1500,
@@ -158,7 +155,6 @@
         let statusText = '';
         let statusColor = '';
 
-        // Логика определения статуса
         if (realWithoutLive === 0) {
             statusText = '❌ Кэшбэк недоступен (Нет ставок)';
             statusColor = 'red';
@@ -324,6 +320,7 @@
             Kometa: 'Мин. проигрыш: 5 EUR / 500 RUB | Доступен с: 1 LVL | 2+ LVL Мин. проигрыш 101 EUR / 10 000 RUB '
         };
 
+        // ... (HTML строки остались без изменений, я сохранил их полностью как ты просил)
         const infoMap = {
             Catcasino: `
                 <section class="cat-cb" style="font-family:Inter,Arial,sans-serif;max-width:820px;margin:18px auto;padding:18px;border-radius:10px; box-shadow:0 6px 22px rgba(0,0,0,0.08);background:#fff;border:1px solid #eef2f6;">
@@ -1054,20 +1051,31 @@
         }
     }
 
-    function init() {
-        const interval = setInterval(() => {
-            const el = document.querySelector("#SummaryUserId");
-            if (el) {
+    // --- НОВАЯ ЛОГИКА ЗАПУСКА ДЛЯ SPA ---
+    function watchForPage() {
+        setInterval(() => {
+            // Если мы не на странице Summary - ничего не делаем
+            if (!window.location.href.includes('/Users/Summary')) return;
+
+            const targetEl = document.querySelector("#SummaryUserId");
+            const uiExists = document.getElementById("cashback-window");
+
+            // Если ID пользователя появился, а нашего интерфейса еще нет
+            if (targetEl && !uiExists) {
                 getUserId();
                 createUI();
                 projectName = detectProject() || 'Неизвестно';
                 showConditionsForProject(projectName);
                 setupNgrToggle();
-                clearInterval(interval);
                 log("✅ Калькулятор кэшбэка загружен. Проект:", projectName);
             }
-        }, 500);
+        }, 1000); // Проверяем страницу каждую секунду
     }
+
+    // Запускаем наблюдатель вместо ожидания загрузки страницы
+    watchForPage();
+
+})();
 
     window.addEventListener('load', init);
 })();
