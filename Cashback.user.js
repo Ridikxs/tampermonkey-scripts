@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cashback
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Подсчитывает Cashback c доп информацией. 
 // @author       Calvin/River
 // @match        *://*.fundist.org/*
@@ -354,7 +354,7 @@
             Mers: 'Мин. проигрыш: 30 EUR / 3000 RUB | Доступен с: 2 LVL',
             Kent: 'Мин. проигрыш: 30 EUR / 3000 RUB | Доступен с: 2 LVL',
             R7: 'Мин. проигрыш: 40 EUR / 4000 RUB | Доступен с: 2 LVL',
-            Kometa: 'Мин. проигрыш: 5 EUR / 500 RUB | Доступен с: 1 LVL | 2+ LVL Мин. проигрыш 101 EUR / 10 000 RUB '
+            Kometa: 'Мин. проигрыш: 5 EUR / 500 RUB | Доступен с: 1 LVL | 2+ LVL Мин. проигрыш 50 EUR / 5 000 RUB '
         };
 
         const infoMap = {
@@ -907,8 +907,8 @@
                       <tbody>
                         <tr>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">2 lvl</td>
-                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">101 - 250 EUR</td>
-                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">10 000 - 24 999 RUB</td>
+                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">50 - 250 EUR</td>
+                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">5 000 - 24 999 RUB</td>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;"><b>4%</b></td>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;"><b>x3</b></td>
                         </tr>
