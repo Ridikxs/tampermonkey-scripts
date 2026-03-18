@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cashback
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Подсчитывает Cashback c доп информацией. 
 // @author       Calvin/River
 // @match        *://*.fundist.org/*
@@ -107,6 +107,14 @@
         };
     }
 
+    function getLoyaltyLevel() {
+        const levelEl = document.querySelector('#LoyaltyBlockDataList tbody tr th[name="col-Level"], #LoyaltyBlockDataList tbody tr td[name="col-Level"]');
+        if (levelEl) {
+            return parseInt(levelEl.textContent.trim(), 10) || 1;
+        }
+        return 1;
+    }
+
     function createUI(targetContainer, projName) {
         if (!targetContainer) return;
         const div = document.createElement("div");
@@ -168,6 +176,7 @@
         }
 
         const realWithoutLive = normalCashback - liveCashback;
+        const playerLevel = getLoyaltyLevel();
 
         const minLossMap = {
             Catcasino: 5000,
@@ -177,7 +186,7 @@
             Mers: 3000,
             Kent: 3000,
             R7: 4000,
-            Kometa: 500
+            Kometa: playerLevel >= 2 ? 5000 : 500
         };
         const minLoss = minLossMap[projectName] || 0;
 
@@ -223,7 +232,8 @@
                 <b style="display: block; margin-bottom: 5px;">Глобальная статистика (EUR)</b>
                 Депозиты+Ручные: <span style="color: navy;">${depositsEur.toFixed(2)}</span><br>
                 Выводы+Ручные: <span style="color: red;">${withdrawalsEur.toFixed(2)}</span><br>
-                Разница: <b>${globalDiff.toFixed(2)}</b>
+                Разница: <b>${globalDiff.toFixed(2)}</b><br><br>
+                <span style="color: #475569; font-weight: bold;">Уровень лояльности: ${playerLevel}</span>
             </div>
             <span style="font-size: 16px; font-weight: bold; color: ${statusColor};">${statusText}</span>
         `;
@@ -907,8 +917,8 @@
                       <tbody>
                         <tr>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">2 lvl</td>
-                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">50 - 250 EUR</td>
-                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">5 000 - 24 999 RUB</td>
+                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">101 - 250 EUR</td>
+                          <td style="padding:10px;border-bottom:1px dashed #f1f5f9;">10 000 - 24 999 RUB</td>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;"><b>4%</b></td>
                           <td style="padding:10px;border-bottom:1px dashed #f1f5f9;"><b>x3</b></td>
                         </tr>
