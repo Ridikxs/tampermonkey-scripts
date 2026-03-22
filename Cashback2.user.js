@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cashback2
 // @namespace    http://tampermonkey.net/
-// @version      2.8
+// @version      2.9
 // @description  Подсчитывает Cashback c доп информацией. 
 // @author       Calvin/River
 // @match        *://*.fundist.org/*
