@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -152,7 +152,18 @@
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
         for (let tab of tabs) {
-            if (tab.textContent.toLowerCase().includes('bot')) {
+            let isTargetTab = false;
+            const spans = tab.querySelectorAll('span');
+            
+            for (let i = 0; i < spans.length; i++) {
+                const cleanText = spans[i].textContent.replace(/\u00a0/g, '').trim().toLowerCase();
+                if (cleanText === 'bots') {
+                    isTargetTab = true;
+                    break;
+                }
+            }
+
+            if (isTargetTab) {
                 if (tab.getAttribute('aria-selected') !== 'true') {
                     const span = tab.querySelector('span');
                     if (span) {
