@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -77,6 +77,7 @@
         
         const isEnabled1 = GM_getValue('isEnabled1', false);
         const isEnabled2 = GM_getValue('isEnabled2', false);
+        const isEnabled3 = GM_getValue('isEnabled3', false);
         const phantomTabActive = GM_getValue('phantomTabActive', true);
         const isRunningAutoTransfer = GM_getValue('isRunningAutoTransfer', false);
 
@@ -87,6 +88,7 @@
             <div id="tm-helper-content" style="display: none; background: #2c2c2c; color: white; padding: 10px; border-radius: 0 0 8px 8px;">
                 <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_sync1" ${isEnabled1 ? 'checked' : ''}> Авто-супервайз</label>
                 <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_sync2" ${isEnabled2 ? 'checked' : ''}> Закрывать операторов</label>
+                <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_sync3" ${isEnabled3 ? 'checked' : ''}> Закрывать неактивные</label>
                 <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_phantomTab" ${phantomTabActive ? 'checked' : ''}> Фантомный Traffic</label>
                 <hr style="border: 0; border-top: 1px solid #444; margin: 8px 0;">
                 
@@ -116,6 +118,10 @@
 
         document.getElementById('tm_sync2').onchange = (e) => {
             GM_setValue('isEnabled2', e.target.checked);
+        };
+
+        document.getElementById('tm_sync3').onchange = (e) => {
+            GM_setValue('isEnabled3', e.target.checked);
         };
 
         document.getElementById('tm_phantomTab').onchange = (e) => {
@@ -240,6 +246,18 @@
                 if (!REQUIRED_NAMES.some(name => visitorName.includes(name))) {
                     closeSingleChat(chat);
                 }
+            }
+        });
+    }
+
+    function checkInactiveChats() {
+        if (!GM_getValue('isEnabled3', false) || GM_getValue('isAutoCloseAllActive', false)) return;
+        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
+        
+        chatBlocks.forEach(chat => {
+            const lastMessageEl = chat.querySelector('[data-testid="last-message-text"]');
+            if (lastMessageEl && lastMessageEl.textContent.includes('Archived')) {
+                closeSingleChat(chat);
             }
         });
     }
@@ -478,6 +496,7 @@
             
             clickSuperviseChatButtons();
             checkChatNames();
+            checkInactiveChats();
             injectTransferButton();
             
             await smartSleep(800); 
