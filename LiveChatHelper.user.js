@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -27,6 +27,12 @@
     if (isTopWindow) {
         GM_setValue('isAutoCloseAllActive', false);
         GM_setValue('isRunningAutoTransfer', false);
+    }
+
+    if (!isTopWindow) {
+        setInterval(() => {
+            window.dispatchEvent(new Event('focus'));
+        }, 10000);
     }
 
     function createUI() {
@@ -129,7 +135,8 @@
                 iframe.style.left = '0';
                 iframe.style.width = '2500px';
                 iframe.style.height = '2500px';
-                iframe.style.opacity = '0.001';
+                iframe.style.transform = 'translate(-2499px, -2499px)';
+                iframe.style.opacity = '1';
                 iframe.style.pointerEvents = 'none';
                 iframe.style.zIndex = '999998';
                 document.body.appendChild(iframe);
@@ -145,9 +152,17 @@
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
         for (let tab of tabs) {
-            if (tab.textContent.toLowerCase().includes('bots')) {
+            if (tab.textContent.toLowerCase().includes('bot')) {
                 if (tab.getAttribute('aria-selected') !== 'true') {
+                    const span = tab.querySelector('span');
+                    if (span) {
+                        span.click();
+                        span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                    }
                     tab.click();
+                    tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 }
                 break;
             }
