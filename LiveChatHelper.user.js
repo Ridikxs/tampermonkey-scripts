@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Live Chat Helper
+// @version      2.0
+// @description  Ботолог
 // @author       Calvin
-// @match        https://my.livechatinc.com/*
+// @match        *://*.livechatinc.com/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatHelper.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/LiveChatHelper.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @run-at       document-start
