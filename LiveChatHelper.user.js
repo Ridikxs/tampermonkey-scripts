@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -40,7 +40,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.5); border-radius: 8px;
             width: 200px; transition: all 0.3s ease;
         `;
-
+        
         const isEnabled1 = GM_getValue('isEnabled1', false);
         const isEnabled2 = GM_getValue('isEnabled2', false);
         const phantomTabActive = GM_getValue('phantomTabActive', true);
@@ -55,7 +55,7 @@
                 <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_sync2" ${isEnabled2 ? 'checked' : ''}> Закрывать операторов</label>
                 <label style="cursor: pointer; display: block; margin-bottom: 5px;"><input type="checkbox" id="tm_phantomTab" ${phantomTabActive ? 'checked' : ''}> Фантомный Traffic</label>
                 <hr style="border: 0; border-top: 1px solid #444; margin: 8px 0;">
-
+                
                 <button id="btn_autoTransfer" style="width:100%; margin-bottom:5px; cursor: pointer; padding: 6px; background: ${isRunningAutoTransfer ? '#4CAF50' : '#5a5a5a'}; color: white; border: none; border-radius: 4px; transition: 0.2s;">Авто перевод: ${isRunningAutoTransfer ? 'ВКЛ' : 'ВЫКЛ'}</button>
                 <button id="btn_checkBot" style="width:100%; margin-bottom:5px; cursor: pointer; padding: 6px; background: #5a5a5a; color: white; border: none; border-radius: 4px; transition: 0.2s;">Проверка бота: ВЫКЛ</button>
                 <button id="btn_closeAll" style="width:100%; cursor: pointer; padding: 6px; background: #d9534f; color: white; border: none; border-radius: 4px; transition: 0.2s; font-weight: bold;">Закрытие всех: ВЫКЛ</button>
@@ -145,7 +145,7 @@
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
         for (let tab of tabs) {
-            if (tab.textContent.toLowerCase().includes('bot')) {
+            if (tab.textContent.toLowerCase().includes('bots')) {
                 if (tab.getAttribute('aria-selected') !== 'true') {
                     tab.click();
                 }
@@ -169,8 +169,8 @@
 
     function checkChatNames() {
         if (!GM_getValue('isEnabled2', false) || GM_getValue('isAutoCloseAllActive', false)) return;
-        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-
+        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]'); 
+        
         chatBlocks.forEach(chat => {
             const nameElement = chat.querySelector('[data-testid="visitor-name"]');
             if (nameElement) {
@@ -184,18 +184,18 @@
 
     async function closeSingleChat(chatElement) {
         const chatId = chatElement.getAttribute('data-testid');
-        if (!chatId || processingChats.has(chatId)) return;
+        if (!chatId || processingChats.has(chatId)) return; 
 
-        processingChats.add(chatId);
+        processingChats.add(chatId); 
 
         try {
             const closeButton = chatElement.querySelector('button[data-testid="list-close-chat-button"]');
             if (closeButton) {
-                closeButton.click();
-
+                closeButton.click(); 
+                
                 let trueStopButton = null;
                 for (let i = 0; i < 15; i++) {
-                    await new Promise(r => setTimeout(r, 200));
+                    await new Promise(r => setTimeout(r, 200)); 
                     const candidates = document.querySelectorAll('[data-testid="stop-supervise"]');
                     for (let candidate of candidates) {
                         if (candidate.tagName === 'BUTTON' && candidate.textContent.includes('Stop supervising')) {
@@ -203,12 +203,12 @@
                             break;
                         }
                     }
-                    if (trueStopButton) break;
+                    if (trueStopButton) break; 
                 }
 
                 if (trueStopButton) {
                     trueStopButton.click();
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 500)); 
                 }
             }
         } finally {
@@ -220,7 +220,7 @@
         while (true) {
             if (GM_getValue('isAutoCloseAllActive', false)) {
                 const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-
+                
                 if (chatBlocks.length > 0) {
                     chatBlocks.forEach((chat, index) => {
                         setTimeout(() => {
@@ -228,10 +228,10 @@
                             if (closeButton) {
                                 closeButton.click();
                             }
-                        }, index * 50);
+                        }, index * 50); 
                     });
 
-                    const maxWaitTime = 5000 + (chatBlocks.length * 100);
+                    const maxWaitTime = 5000 + (chatBlocks.length * 100); 
                     const startTime = Date.now();
 
                     while (Date.now() - startTime < maxWaitTime && GM_getValue('isAutoCloseAllActive', false)) {
@@ -241,7 +241,7 @@
                                 btn.click();
                             }
                         });
-                        await new Promise(r => setTimeout(r, 200));
+                        await new Promise(r => setTimeout(r, 200)); 
                     }
                 } else {
                     await new Promise(r => setTimeout(r, 1000));
@@ -284,7 +284,7 @@
         if (agentTabBtn) {
             if (agentTabBtn.getAttribute('aria-selected') !== 'true') {
                 agentTabBtn.click();
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 500)); 
             } else {
                 await new Promise(r => setTimeout(r, 200));
             }
@@ -358,10 +358,10 @@
                 if (targetChat) {
                     transferCooldown.set(targetChatId, Date.now());
                     targetChat.click();
-                    await new Promise(r => setTimeout(r, 1000));
-
+                    await new Promise(r => setTimeout(r, 1000)); 
+                    
                     await executeSmartTransfer();
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 2000)); 
                 } else {
                     await new Promise(r => setTimeout(r, 2000));
                 }
