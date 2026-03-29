@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.7
+// @version      2.8
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -14,6 +14,15 @@
 
 (function() {
     'use strict';
+
+    function lchLog(msg, isError = false) {
+        const prefix = isTopWindow ? '[LCH Главное окно]' : '[LCH Фрейм Traffic]';
+        if (isError) {
+            console.error(`${prefix} ${msg}`);
+        } else {
+            console.log(`${prefix} ${msg}`);
+        }
+    }
 
     Object.defineProperty(document, 'hidden', {value: false, writable: false});
     Object.defineProperty(document, 'visibilityState', {value: 'visible', writable: false});
@@ -36,6 +45,21 @@
     if (isTopWindow) {
         GM_setValue('isAutoCloseAllActive', false);
         GM_setValue('isRunningAutoTransfer', false);
+        localStorage.setItem('lch_iframe_heartbeat', '0');
+        
+        setInterval(() => {
+            if (!GM_getValue('phantomTabActive', true)) return;
+            const hb = parseInt(localStorage.getItem('lch_iframe_heartbeat') || '0', 10);
+            const now = Date.now();
+            if (now - hb > 8000) {
+                lchLog('ОШИБКА КРИТИЧЕСКАЯ: Фрейм не отвечает больше 8 секунд! Сайт блокирует iframe (X-Frame-Options) или браузер убил процесс.', true);
+            }
+        }, 5000);
+    } else {
+        lchLog('Скрипт успешно запущен внутри фрейма!');
+        setInterval(() => {
+            localStorage.setItem('lch_iframe_heartbeat', Date.now().toString());
+        }, 2000);
     }
 
     function createUI() {
@@ -87,11 +111,15 @@
             header.style.background = isExpanded ? '#333' : '#474747';
         };
 
-        document.getElementById('tm_sync1').onchange = (e) => GM_setValue('isEnabled1', e.target.checked);
+        document.getElementById('tm_sync1').onchange = (e) => {
+            GM_setValue('isEnabled1', e.target.checked);
+            lchLog(`Авто-супервайз ${e.target.checked ? 'ВКЛ' : 'ВЫКЛ'}`);
+        };
         document.getElementById('tm_sync2').onchange = (e) => GM_setValue('isEnabled2', e.target.checked);
         document.getElementById('tm_sync3').onchange = (e) => GM_setValue('isEnabled3', e.target.checked);
         document.getElementById('tm_phantomTab').onchange = (e) => {
             GM_setValue('phantomTabActive', e.target.checked);
+            lchLog(`Фантомный Traffic ${e.target.checked ? 'ВКЛ' : 'ВЫКЛ'}`);
             managePhantomIframe();
         };
 
@@ -124,6 +152,7 @@
         
         if (GM_getValue('phantomTabActive', true)) {
             if (!iframe) {
+                lchLog('Создаем iframe для /engage/traffic...');
                 iframe = document.createElement('iframe');
                 iframe.id = iframeId;
                 iframe.src = 'https://my.livechatinc.com/engage/traffic';
@@ -132,25 +161,38 @@
                 iframe.style.left = '0';
                 iframe.style.width = '2500px';
                 iframe.style.height = '2500px';
-                iframe.style.transform = 'translate(-2499px, -2499px)';
-                iframe.style.opacity = '0.1';
+                iframe.style.opacity = '0.01';
                 iframe.style.pointerEvents = 'none';
-                iframe.style.zIndex = '999998';
+                iframe.style.zIndex = '-999998';
+                
+                iframe.onload = () => lchLog('iframe.onload сработал. Ожидаем запуск скрипта внутри фрейма...');
+                iframe.onerror = () => lchLog('ОШИБКА: Браузер заблокировал загрузку iframe!', true);
+                
                 document.body.appendChild(iframe);
             }
         } else if (iframe) {
             iframe.remove();
+            lchLog('Iframe удален.');
         }
     }
 
     function keepBotTabActive() {
-        if (!isTopWindow) {
-            window.dispatchEvent(new Event('focus'));
+        if (isTopWindow) return;
+        window.dispatchEvent(new Event('focus'));
+
+        if (!GM_getValue('phantomTabActive', true)) return;
+        
+        if (!window.location.href.includes('/engage/traffic')) {
+            lchLog(`ОШИБКА URL: Ожидался /engage/traffic, но мы на ${window.location.href}`, true);
+            return;
         }
 
-        if (!GM_getValue('phantomTabActive', true) || !window.location.href.includes('/engage/traffic')) return;
-
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
+        if (tabs.length === 0) {
+            lchLog('ОШИБКА: Вкладки не найдены. Возможно страница не прогрузилась.', true);
+            return;
+        }
+
         for (let tab of tabs) {
             let isTargetTab = false;
             const spans = tab.querySelectorAll('span');
@@ -162,16 +204,19 @@
                 }
             }
 
-            if (isTargetTab && tab.getAttribute('aria-selected') !== 'true') {
-                const span = tab.querySelector('span');
-                if (span) {
-                    span.click();
-                    span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            if (isTargetTab) {
+                if (tab.getAttribute('aria-selected') !== 'true') {
+                    lchLog('Вкладка bots найдена, но не активна. Выполняю клик...');
+                    const span = tab.querySelector('span');
+                    if (span) {
+                        span.click();
+                        span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                    }
+                    tab.click();
+                    tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 }
-                tab.click();
-                tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 break;
             }
         }
