@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -26,6 +26,12 @@
     let isProcessingAction = false;
 
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    function createWorkerTimer(callback, interval) {
+        const blob = new Blob([`setInterval(() => postMessage('tick'), ${interval});`], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        worker.onmessage = callback;
+    }
 
     if (isTopWindow) {
         GM_setValue('isAutoCloseAllActive', false);
@@ -126,9 +132,10 @@
                 iframe.style.left = '0';
                 iframe.style.width = '2500px';
                 iframe.style.height = '2500px';
-                iframe.style.opacity = '0.001';
+                iframe.style.transform = 'translate(-2499px, -2499px)';
+                iframe.style.opacity = '0.1';
                 iframe.style.pointerEvents = 'none';
-                iframe.style.zIndex = '-999998';
+                iframe.style.zIndex = '999998';
                 document.body.appendChild(iframe);
             }
         } else if (iframe) {
@@ -137,6 +144,10 @@
     }
 
     function keepBotTabActive() {
+        if (!isTopWindow) {
+            window.dispatchEvent(new Event('focus'));
+        }
+
         if (!GM_getValue('phantomTabActive', true) || !window.location.href.includes('/engage/traffic')) return;
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
@@ -432,9 +443,9 @@
         if (isTopWindow) {
             createUI();
             managePhantomIframe();
-            setInterval(mainLoop, 1200); 
+            createWorkerTimer(mainLoop, 1200); 
         } else {
-            setInterval(keepBotTabActive, 3000); 
+            createWorkerTimer(keepBotTabActive, 3000); 
         }
     });
 
