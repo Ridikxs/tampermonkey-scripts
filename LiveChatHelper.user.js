@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.8
+// @version      2.9
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -15,13 +15,8 @@
 (function() {
     'use strict';
 
-    function lchLog(msg, isError = false) {
-        const prefix = isTopWindow ? '[LCH Главное окно]' : '[LCH Фрейм Traffic]';
-        if (isError) {
-            console.error(`${prefix} ${msg}`);
-        } else {
-            console.log(`${prefix} ${msg}`);
-        }
+    if (window.top !== window.self) {
+        return;
     }
 
     Object.defineProperty(document, 'hidden', {value: false, writable: false});
@@ -29,12 +24,37 @@
     window.addEventListener('visibilitychange', e => e.stopPropagation(), true);
 
     const REQUIRED_NAMES = ["AI", "Robbie", "Florian", "Hector", "Jasper", "Jamie", "Enzo", "Nicholas", "Atom", "Motor"];
-    const isTopWindow = (window.top === window.self);
+    const isPhantomWindow = (window.name === 'lch_phantom');
+    const isMainWindow = !isPhantomWindow;
     const processingChats = new Set();
     const transferCooldown = new Map();
     let isProcessingAction = false;
 
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    const workerCode = `
+        self.onmessage = function(e) {
+            setTimeout(function() {
+                self.postMessage(e.data);
+            }, e.data.time);
+        };
+    `;
+    const workerBlob = new Blob([workerCode], { type: 'text/javascript' });
+    const timerWorker = new Worker(URL.createObjectURL(workerBlob));
+
+    function smartSleep(ms) {
+        return new Promise(resolve => {
+            const id = Math.random();
+            const listener = (e) => {
+                if (e.data.id === id) {
+                    timerWorker.removeEventListener('message', listener);
+                    resolve();
+                }
+            };
+            timerWorker.addEventListener('message', listener);
+            timerWorker.postMessage({ id: id, time: ms });
+        });
+    }
 
     function createWorkerTimer(callback, interval) {
         const blob = new Blob([`setInterval(() => postMessage('tick'), ${interval});`], { type: 'application/javascript' });
@@ -42,29 +62,12 @@
         worker.onmessage = callback;
     }
 
-    if (isTopWindow) {
+    if (isMainWindow) {
         GM_setValue('isAutoCloseAllActive', false);
         GM_setValue('isRunningAutoTransfer', false);
-        localStorage.setItem('lch_iframe_heartbeat', '0');
-        
-        setInterval(() => {
-            if (!GM_getValue('phantomTabActive', true)) return;
-            const hb = parseInt(localStorage.getItem('lch_iframe_heartbeat') || '0', 10);
-            const now = Date.now();
-            if (now - hb > 8000) {
-                lchLog('ОШИБКА КРИТИЧЕСКАЯ: Фрейм не отвечает больше 8 секунд! Сайт блокирует iframe (X-Frame-Options) или браузер убил процесс.', true);
-            }
-        }, 5000);
-    } else {
-        lchLog('Скрипт успешно запущен внутри фрейма!');
-        setInterval(() => {
-            localStorage.setItem('lch_iframe_heartbeat', Date.now().toString());
-        }, 2000);
     }
 
     function createUI() {
-        if (!isTopWindow) return;
-
         const panel = document.createElement('div');
         panel.id = 'tm-helper-panel';
         panel.style = `
@@ -111,17 +114,10 @@
             header.style.background = isExpanded ? '#333' : '#474747';
         };
 
-        document.getElementById('tm_sync1').onchange = (e) => {
-            GM_setValue('isEnabled1', e.target.checked);
-            lchLog(`Авто-супервайз ${e.target.checked ? 'ВКЛ' : 'ВЫКЛ'}`);
-        };
+        document.getElementById('tm_sync1').onchange = (e) => GM_setValue('isEnabled1', e.target.checked);
         document.getElementById('tm_sync2').onchange = (e) => GM_setValue('isEnabled2', e.target.checked);
         document.getElementById('tm_sync3').onchange = (e) => GM_setValue('isEnabled3', e.target.checked);
-        document.getElementById('tm_phantomTab').onchange = (e) => {
-            GM_setValue('phantomTabActive', e.target.checked);
-            lchLog(`Фантомный Traffic ${e.target.checked ? 'ВКЛ' : 'ВЫКЛ'}`);
-            managePhantomIframe();
-        };
+        document.getElementById('tm_phantomTab').onchange = (e) => GM_setValue('phantomTabActive', e.target.checked);
 
         document.getElementById('btn_autoTransfer').onclick = function() {
             let newState = !GM_getValue('isRunningAutoTransfer', false);
@@ -145,54 +141,41 @@
         };
     }
 
-    function managePhantomIframe() {
-        if (!isTopWindow) return;
-        const iframeId = 'tm-phantom-traffic';
-        let iframe = document.getElementById(iframeId);
-        
-        if (GM_getValue('phantomTabActive', true)) {
-            if (!iframe) {
-                lchLog('Создаем iframe для /engage/traffic...');
-                iframe = document.createElement('iframe');
-                iframe.id = iframeId;
-                iframe.src = 'https://my.livechatinc.com/engage/traffic';
-                iframe.style.position = 'fixed';
-                iframe.style.top = '0';
-                iframe.style.left = '0';
-                iframe.style.width = '2500px';
-                iframe.style.height = '2500px';
-                iframe.style.opacity = '0.01';
-                iframe.style.pointerEvents = 'none';
-                iframe.style.zIndex = '-999998';
-                
-                iframe.onload = () => lchLog('iframe.onload сработал. Ожидаем запуск скрипта внутри фрейма...');
-                iframe.onerror = () => lchLog('ОШИБКА: Браузер заблокировал загрузку iframe!', true);
-                
-                document.body.appendChild(iframe);
+    function managePhantomWindow() {
+        const isActive = GM_getValue('phantomTabActive', true);
+
+        if (isActive) {
+            const hb = parseInt(localStorage.getItem('lch_phantom_heartbeat') || '0', 10);
+            const isAlive = (Date.now() - hb) < 8000;
+
+            if (!isAlive) {
+                localStorage.removeItem('lch_phantom_command');
+                const phantom = window.open('https://my.livechatinc.com/engage/traffic', 'lch_phantom', 'width=300,height=300,left=9999,top=9999,menubar=no,toolbar=no,location=no,status=no');
+
+                if (!phantom) {
+                    if (!GM_getValue('popupAlertShown', false)) {
+                        alert('[Live Chat Helper]\n\nБраузер заблокировал фоновое окно!\nПожалуйста, РАЗРЕШИТЕ ВСПЛЫВАЮЩИЕ ОКНА (Pop-ups) для этого сайта в правой части адресной строки.');
+                        GM_setValue('popupAlertShown', true);
+                    }
+                    GM_setValue('phantomTabActive', false);
+                    const cb = document.getElementById('tm_phantomTab');
+                    if (cb) cb.checked = false;
+                } else {
+                    localStorage.setItem('lch_phantom_heartbeat', Date.now().toString());
+                }
             }
-        } else if (iframe) {
-            iframe.remove();
-            lchLog('Iframe удален.');
+        } else {
+            localStorage.setItem('lch_phantom_command', 'close');
         }
     }
 
     function keepBotTabActive() {
-        if (isTopWindow) return;
-        window.dispatchEvent(new Event('focus'));
-
-        if (!GM_getValue('phantomTabActive', true)) return;
-        
         if (!window.location.href.includes('/engage/traffic')) {
-            lchLog(`ОШИБКА URL: Ожидался /engage/traffic, но мы на ${window.location.href}`, true);
+            window.location.href = 'https://my.livechatinc.com/engage/traffic';
             return;
         }
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
-        if (tabs.length === 0) {
-            lchLog('ОШИБКА: Вкладки не найдены. Возможно страница не прогрузилась.', true);
-            return;
-        }
-
         for (let tab of tabs) {
             let isTargetTab = false;
             const spans = tab.querySelectorAll('span');
@@ -204,19 +187,16 @@
                 }
             }
 
-            if (isTargetTab) {
-                if (tab.getAttribute('aria-selected') !== 'true') {
-                    lchLog('Вкладка bots найдена, но не активна. Выполняю клик...');
-                    const span = tab.querySelector('span');
-                    if (span) {
-                        span.click();
-                        span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                        span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                    }
-                    tab.click();
-                    tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            if (isTargetTab && tab.getAttribute('aria-selected') !== 'true') {
+                const span = tab.querySelector('span');
+                if (span) {
+                    span.click();
+                    span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 }
+                tab.click();
+                tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 break;
             }
         }
@@ -424,7 +404,7 @@
     }
 
     function injectTransferButton() {
-        if (!isTopWindow || document.getElementById('tm-smart-transfer-btn')) return;
+        if (document.getElementById('tm-smart-transfer-btn')) return;
 
         const copyLinkBtn = document.querySelector('button[aria-label="Copy chat link"]');
         if (!copyLinkBtn) return;
@@ -457,40 +437,55 @@
         container.parentNode.insertBefore(btnContainer, container.nextSibling);
     }
 
-    async function mainLoop() {
-        if (isProcessingAction) return;
-
-        clickSuperviseChatButtons();
-        injectTransferButton();
-
-        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-
-        if (GM_getValue('isAutoCloseAllActive', false)) {
-            isProcessingAction = true;
-            await processAutoCloseAll(chatBlocks);
-            isProcessingAction = false;
-            return;
-        }
-
-        if (GM_getValue('isRunningAutoTransfer', false)) {
-            isProcessingAction = true;
-            await processAutoTransfer(chatBlocks);
-            isProcessingAction = false;
-            return;
-        }
-
-        isProcessingAction = true;
-        await processSingleCloses(chatBlocks);
-        isProcessingAction = false;
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
-        if (isTopWindow) {
+        if (isPhantomWindow) {
+            try { window.resizeTo(300, 300); window.moveTo(9999, 9999); } catch(e) {}
+            
+            createWorkerTimer(async () => {
+                localStorage.setItem('lch_phantom_heartbeat', Date.now().toString());
+
+                if (localStorage.getItem('lch_phantom_command') === 'close') {
+                    localStorage.removeItem('lch_phantom_command');
+                    window.close();
+                    return;
+                }
+
+                window.dispatchEvent(new Event('focus'));
+                keepBotTabActive();
+                clickSuperviseChatButtons();
+            }, 1500);
+
+        } else if (isMainWindow) {
             createUI();
-            managePhantomIframe();
-            createWorkerTimer(mainLoop, 1200); 
-        } else {
-            createWorkerTimer(keepBotTabActive, 3000); 
+
+            createWorkerTimer(async () => {
+                managePhantomWindow();
+
+                if (isProcessingAction) return;
+
+                clickSuperviseChatButtons();
+                injectTransferButton();
+
+                const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
+
+                if (GM_getValue('isAutoCloseAllActive', false)) {
+                    isProcessingAction = true;
+                    await processAutoCloseAll(chatBlocks);
+                    isProcessingAction = false;
+                    return;
+                }
+
+                if (GM_getValue('isRunningAutoTransfer', false)) {
+                    isProcessingAction = true;
+                    await processAutoTransfer(chatBlocks);
+                    isProcessingAction = false;
+                    return;
+                }
+
+                isProcessingAction = true;
+                await processSingleCloses(chatBlocks);
+                isProcessingAction = false;
+            }, 1200);
         }
     });
 
