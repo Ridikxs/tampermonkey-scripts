@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Live Chat Helper
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  Ботолог
 // @author       Calvin
 // @match        *://*.livechatinc.com/*
@@ -23,44 +23,13 @@
     const isTopWindow = (window.top === window.self);
     const processingChats = new Set();
     const transferCooldown = new Map();
+    let isProcessingAction = false;
 
-    const workerCode = `
-        self.onmessage = function(e) {
-            setTimeout(function() {
-                self.postMessage(e.data);
-            }, e.data.time);
-        };
-    `;
-    const workerBlob = new Blob([workerCode], { type: 'text/javascript' });
-    const timerWorker = new Worker(URL.createObjectURL(workerBlob));
-
-    function smartSleep(ms) {
-        return new Promise(resolve => {
-            const id = Math.random();
-            const listener = (e) => {
-                if (e.data.id === id) {
-                    timerWorker.removeEventListener('message', listener);
-                    resolve();
-                }
-            };
-            timerWorker.addEventListener('message', listener);
-            timerWorker.postMessage({ id: id, time: ms });
-        });
-    }
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     if (isTopWindow) {
         GM_setValue('isAutoCloseAllActive', false);
         GM_setValue('isRunningAutoTransfer', false);
-    }
-
-    if (!isTopWindow) {
-        async function focusLoop() {
-            while (true) {
-                window.dispatchEvent(new Event('focus'));
-                await smartSleep(10000);
-            }
-        }
-        focusLoop();
     }
 
     function createUI() {
@@ -112,26 +81,16 @@
             header.style.background = isExpanded ? '#333' : '#474747';
         };
 
-        document.getElementById('tm_sync1').onchange = (e) => {
-            GM_setValue('isEnabled1', e.target.checked);
-        };
-
-        document.getElementById('tm_sync2').onchange = (e) => {
-            GM_setValue('isEnabled2', e.target.checked);
-        };
-
-        document.getElementById('tm_sync3').onchange = (e) => {
-            GM_setValue('isEnabled3', e.target.checked);
-        };
-
+        document.getElementById('tm_sync1').onchange = (e) => GM_setValue('isEnabled1', e.target.checked);
+        document.getElementById('tm_sync2').onchange = (e) => GM_setValue('isEnabled2', e.target.checked);
+        document.getElementById('tm_sync3').onchange = (e) => GM_setValue('isEnabled3', e.target.checked);
         document.getElementById('tm_phantomTab').onchange = (e) => {
             GM_setValue('phantomTabActive', e.target.checked);
             managePhantomIframe();
         };
 
         document.getElementById('btn_autoTransfer').onclick = function() {
-            let currentState = GM_getValue('isRunningAutoTransfer', false);
-            let newState = !currentState;
+            let newState = !GM_getValue('isRunningAutoTransfer', false);
             GM_setValue('isRunningAutoTransfer', newState);
             this.innerText = newState ? 'Авто перевод: ВКЛ' : 'Авто перевод: ВЫКЛ';
             this.style.background = newState ? '#4CAF50' : '#5a5a5a';
@@ -145,8 +104,7 @@
         };
 
         document.getElementById('btn_closeAll').onclick = function() {
-            let currentState = GM_getValue('isAutoCloseAllActive', false);
-            let newState = !currentState;
+            let newState = !GM_getValue('isAutoCloseAllActive', false);
             GM_setValue('isAutoCloseAllActive', newState);
             this.innerText = newState ? 'Закрытие всех: ВКЛ' : 'Закрытие всех: ВЫКЛ';
             this.style.background = newState ? '#c9302c' : '#d9534f';
@@ -157,9 +115,8 @@
         if (!isTopWindow) return;
         const iframeId = 'tm-phantom-traffic';
         let iframe = document.getElementById(iframeId);
-        const isActive = GM_getValue('phantomTabActive', true);
-
-        if (isActive) {
+        
+        if (GM_getValue('phantomTabActive', true)) {
             if (!iframe) {
                 iframe = document.createElement('iframe');
                 iframe.id = iframeId;
@@ -169,21 +126,18 @@
                 iframe.style.left = '0';
                 iframe.style.width = '2500px';
                 iframe.style.height = '2500px';
-                iframe.style.transform = 'translate(-2499px, -2499px)';
-                iframe.style.opacity = '1';
+                iframe.style.opacity = '0.001';
                 iframe.style.pointerEvents = 'none';
-                iframe.style.zIndex = '999998';
-                iframe.style.contain = 'strict';
+                iframe.style.zIndex = '-999998';
                 document.body.appendChild(iframe);
             }
-        } else {
-            if (iframe) iframe.remove();
+        } else if (iframe) {
+            iframe.remove();
         }
     }
 
     function keepBotTabActive() {
-        if (!GM_getValue('phantomTabActive', true)) return;
-        if (!window.location.href.includes('/engage/traffic')) return;
+        if (!GM_getValue('phantomTabActive', true) || !window.location.href.includes('/engage/traffic')) return;
 
         const tabs = document.querySelectorAll('button[class*="lc-Tab-module__tab"]');
         for (let tab of tabs) {
@@ -191,34 +145,24 @@
             const spans = tab.querySelectorAll('span');
             
             for (let i = 0; i < spans.length; i++) {
-                const cleanText = spans[i].textContent.replace(/\u00a0/g, '').trim().toLowerCase();
-                if (cleanText === 'bots') {
+                if (spans[i].textContent.replace(/\u00a0/g, '').trim().toLowerCase() === 'bots') {
                     isTargetTab = true;
                     break;
                 }
             }
 
-            if (isTargetTab) {
-                if (tab.getAttribute('aria-selected') !== 'true') {
-                    const span = tab.querySelector('span');
-                    if (span) {
-                        span.click();
-                        span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                        span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                    }
-                    tab.click();
-                    tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            if (isTargetTab && tab.getAttribute('aria-selected') !== 'true') {
+                const span = tab.querySelector('span');
+                if (span) {
+                    span.click();
+                    span.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 }
+                tab.click();
+                tab.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                tab.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
                 break;
             }
-        }
-    }
-
-    async function keepBotTabActiveLoop() {
-        while (true) {
-            keepBotTabActive();
-            await smartSleep(3000);
         }
     }
 
@@ -226,38 +170,9 @@
         if (!GM_getValue('isEnabled1', false)) return;
         const buttons = document.querySelectorAll('button[class*="lc-Button-module__btn"]');
         buttons.forEach(btn => {
-            if (btn.textContent.trim() === 'Supervise chat') {
-                if (!btn.hasAttribute('data-tm-clicked')) {
-                    btn.setAttribute('data-tm-clicked', 'true');
-                    btn.click();
-                }
-            }
-        });
-    }
-
-    function checkChatNames() {
-        if (!GM_getValue('isEnabled2', false) || GM_getValue('isAutoCloseAllActive', false)) return;
-        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]'); 
-        
-        chatBlocks.forEach(chat => {
-            const nameElement = chat.querySelector('[data-testid="visitor-name"]');
-            if (nameElement) {
-                const visitorName = nameElement.textContent.trim();
-                if (!REQUIRED_NAMES.some(name => visitorName.includes(name))) {
-                    closeSingleChat(chat);
-                }
-            }
-        });
-    }
-
-    function checkInactiveChats() {
-        if (!GM_getValue('isEnabled3', false) || GM_getValue('isAutoCloseAllActive', false)) return;
-        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-        
-        chatBlocks.forEach(chat => {
-            const lastMessageEl = chat.querySelector('[data-testid="last-message-text"]');
-            if (lastMessageEl && lastMessageEl.textContent.includes('Archived')) {
-                closeSingleChat(chat);
+            if (btn.textContent.trim() === 'Supervise chat' && !btn.hasAttribute('data-tm-clicked')) {
+                btn.setAttribute('data-tm-clicked', 'true');
+                btn.click();
             }
         });
     }
@@ -275,7 +190,7 @@
                 
                 let trueStopButton = null;
                 for (let i = 0; i < 15; i++) {
-                    await smartSleep(200); 
+                    await sleep(200); 
                     const candidates = document.querySelectorAll('[data-testid="stop-supervise"]');
                     for (let candidate of candidates) {
                         if (candidate.tagName === 'BUTTON' && candidate.textContent.includes('Stop supervising')) {
@@ -288,47 +203,62 @@
 
                 if (trueStopButton) {
                     trueStopButton.click();
-                    await smartSleep(500); 
+                    await sleep(400); 
                 }
             }
         } finally {
-            smartSleep(3000).then(() => processingChats.delete(chatId));
+            setTimeout(() => processingChats.delete(chatId), 3000);
         }
     }
 
-    async function autoCloseAllLoop() {
-        while (true) {
-            if (GM_getValue('isAutoCloseAllActive', false)) {
-                const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-                
-                if (chatBlocks.length > 0) {
-                    chatBlocks.forEach((chat, index) => {
-                        smartSleep(index * 50).then(() => {
-                            const closeButton = chat.querySelector('button[data-testid="list-close-chat-button"]');
-                            if (closeButton) {
-                                closeButton.click();
-                            }
-                        });
-                    });
-
-                    const maxWaitTime = 5000 + (chatBlocks.length * 100); 
-                    const startTime = Date.now();
-
-                    while (Date.now() - startTime < maxWaitTime && GM_getValue('isAutoCloseAllActive', false)) {
-                        const stopButtons = document.querySelectorAll('[data-testid="stop-supervise"]');
-                        stopButtons.forEach(btn => {
-                            if (btn.tagName === 'BUTTON' && btn.textContent.includes('Stop supervising')) {
-                                btn.click();
-                            }
-                        });
-                        await smartSleep(200); 
+    async function processSingleCloses(chatBlocks) {
+        for (let chat of chatBlocks) {
+            let needsClose = false;
+            
+            if (GM_getValue('isEnabled2', false)) {
+                const nameElement = chat.querySelector('[data-testid="visitor-name"]');
+                if (nameElement) {
+                    const visitorName = nameElement.textContent.trim();
+                    if (!REQUIRED_NAMES.some(name => visitorName.includes(name))) {
+                        needsClose = true;
                     }
-                } else {
-                    await smartSleep(1000);
                 }
-            } else {
-                await smartSleep(1000);
             }
+            
+            if (!needsClose && GM_getValue('isEnabled3', false)) {
+                const lastMessageEl = chat.querySelector('[data-testid="last-message-text"]');
+                if (lastMessageEl && lastMessageEl.textContent.includes('Archived')) {
+                    needsClose = true;
+                }
+            }
+
+            if (needsClose) {
+                await closeSingleChat(chat);
+            }
+        }
+    }
+
+    async function processAutoCloseAll(chatBlocks) {
+        if (chatBlocks.length === 0) return;
+
+        chatBlocks.forEach((chat, index) => {
+            setTimeout(() => {
+                const closeButton = chat.querySelector('button[data-testid="list-close-chat-button"]');
+                if (closeButton) closeButton.click();
+            }, index * 50); 
+        });
+
+        const maxWaitTime = 4000 + (chatBlocks.length * 100); 
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitTime && GM_getValue('isAutoCloseAllActive', false)) {
+            const stopButtons = document.querySelectorAll('[data-testid="stop-supervise"]');
+            stopButtons.forEach(btn => {
+                if (btn.tagName === 'BUTTON' && btn.textContent.includes('Stop supervising')) {
+                    btn.click();
+                }
+            });
+            await sleep(200); 
         }
     }
 
@@ -336,15 +266,15 @@
         const menuBtn = document.querySelector('[data-testid="chat-menu-trigger-button"]');
         if (!menuBtn) return false;
         menuBtn.click();
-        await smartSleep(400);
+        await sleep(300);
 
         const takeOverBtn = document.querySelector('[data-testid="takeover-chat"]');
         if (takeOverBtn) {
             takeOverBtn.click();
-            await smartSleep(600);
+            await sleep(500);
             const menuBtn2 = document.querySelector('[data-testid="chat-menu-trigger-button"]');
             if (menuBtn2) menuBtn2.click();
-            await smartSleep(400);
+            await sleep(300);
         }
 
         let transferToBtn = null;
@@ -358,16 +288,12 @@
 
         if (!transferToBtn) return false;
         transferToBtn.click();
-        await smartSleep(600);
+        await sleep(500);
 
         const agentTabBtn = document.querySelector('[data-testid="tab-to-select-agent"]');
-        if (agentTabBtn) {
-            if (agentTabBtn.getAttribute('aria-selected') !== 'true') {
-                agentTabBtn.click();
-                await smartSleep(500); 
-            } else {
-                await smartSleep(200);
-            }
+        if (agentTabBtn && agentTabBtn.getAttribute('aria-selected') !== 'true') {
+            agentTabBtn.click();
+            await sleep(400); 
         }
 
         const agents = document.querySelectorAll('[data-testid="agent-transfer-list-item"]');
@@ -403,7 +329,7 @@
 
         if (bestAgent) {
             bestAgent.click();
-            await smartSleep(400);
+            await sleep(300);
             const confirmBtn = document.querySelector('[data-testid="transfer-button"]');
             if (confirmBtn) {
                 confirmBtn.click();
@@ -413,47 +339,36 @@
         return false;
     }
 
-    async function autoTransferLoop() {
-        while (true) {
-            if (GM_getValue('isRunningAutoTransfer', false)) {
-                const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
-                let targetChat = null;
-                let targetChatId = null;
+    async function processAutoTransfer(chatBlocks) {
+        let targetChat = null;
+        let targetChatId = null;
 
-                for (let chat of chatBlocks) {
-                    const nameElement = chat.querySelector('[data-testid="visitor-name"]');
-                    if (nameElement) {
-                        const visitorName = nameElement.textContent.trim();
-                        if (REQUIRED_NAMES.some(name => visitorName.includes(name))) {
-                            const chatId = chat.getAttribute('data-testid');
-                            if (!transferCooldown.has(chatId) || Date.now() - transferCooldown.get(chatId) > 10000) {
-                                targetChat = chat;
-                                targetChatId = chatId;
-                                break;
-                            }
-                        }
+        for (let chat of chatBlocks) {
+            const nameElement = chat.querySelector('[data-testid="visitor-name"]');
+            if (nameElement) {
+                const visitorName = nameElement.textContent.trim();
+                if (REQUIRED_NAMES.some(name => visitorName.includes(name))) {
+                    const chatId = chat.getAttribute('data-testid');
+                    if (!transferCooldown.has(chatId) || Date.now() - transferCooldown.get(chatId) > 10000) {
+                        targetChat = chat;
+                        targetChatId = chatId;
+                        break;
                     }
                 }
-
-                if (targetChat) {
-                    transferCooldown.set(targetChatId, Date.now());
-                    targetChat.click();
-                    await smartSleep(1000); 
-                    
-                    await executeSmartTransfer();
-                    await smartSleep(2000); 
-                } else {
-                    await smartSleep(2000);
-                }
-            } else {
-                await smartSleep(1000);
             }
+        }
+
+        if (targetChat) {
+            transferCooldown.set(targetChatId, Date.now());
+            targetChat.click();
+            await sleep(800); 
+            await executeSmartTransfer();
+            await sleep(1500); 
         }
     }
 
     function injectTransferButton() {
-        if (!isTopWindow) return;
-        if (document.getElementById('tm-smart-transfer-btn')) return;
+        if (!isTopWindow || document.getElementById('tm-smart-transfer-btn')) return;
 
         const copyLinkBtn = document.querySelector('button[aria-label="Copy chat link"]');
         if (!copyLinkBtn) return;
@@ -472,41 +387,55 @@
         btn.innerHTML = '<span class="lc-Button-module__btn__icon___-CG5y lc-Button-module__btn__icon--left___Xke3Q lc-Icon-module__icon___J5RH5 lc-Icon-module__icon--primary___lclud" style="color:#4CAF50;"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" width="20" height="20"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg></span>';
 
         btn.onclick = async () => {
+            if (isProcessingAction) return;
+            isProcessingAction = true;
             btn.disabled = true;
             btn.style.opacity = '0.5';
             await executeSmartTransfer();
             btn.disabled = false;
             btn.style.opacity = '1';
+            isProcessingAction = false;
         };
 
         btnContainer.appendChild(btn);
         container.parentNode.insertBefore(btnContainer, container.nextSibling);
     }
 
+    async function mainLoop() {
+        if (isProcessingAction) return;
+
+        clickSuperviseChatButtons();
+        injectTransferButton();
+
+        const chatBlocks = document.querySelectorAll('[data-testid="supervised-chats"] li[data-testid^="chat-item"]');
+
+        if (GM_getValue('isAutoCloseAllActive', false)) {
+            isProcessingAction = true;
+            await processAutoCloseAll(chatBlocks);
+            isProcessingAction = false;
+            return;
+        }
+
+        if (GM_getValue('isRunningAutoTransfer', false)) {
+            isProcessingAction = true;
+            await processAutoTransfer(chatBlocks);
+            isProcessingAction = false;
+            return;
+        }
+
+        isProcessingAction = true;
+        await processSingleCloses(chatBlocks);
+        isProcessingAction = false;
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         if (isTopWindow) {
             createUI();
             managePhantomIframe();
+            setInterval(mainLoop, 1200); 
+        } else {
+            setInterval(keepBotTabActive, 3000); 
         }
-
-        let observerIsRunning = false;
-        const observer = new MutationObserver(async () => {
-            if (observerIsRunning) return;
-            observerIsRunning = true;
-            
-            clickSuperviseChatButtons();
-            checkChatNames();
-            checkInactiveChats();
-            injectTransferButton();
-            
-            await smartSleep(800); 
-            observerIsRunning = false;
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-
-        keepBotTabActiveLoop();
-        autoCloseAllLoop();
-        autoTransferLoop();
     });
 
 })();
