@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         New Clock
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Окрашивает таймер при достижении времени.
 // @author       Calvin
 // @match        https://sparkmoth.com/*
+// @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NewClock.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/NewClock.user.js
 // @grant        none
