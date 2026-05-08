@@ -10,7 +10,7 @@
     "TransferChatToVIP.user.js": ["LiveChat"],
     "LiveChatSounds.user.js": ["LiveChat"],
     "X3Cool.user.js": ["Fundist"],
-    "Alarmclock.user.js": ["LiveChat"],
+    "Alarmclock.user.js": ["ChatWood"],
     "Analyzer.user.js": ["LiveChat"],
     "BonusCopy.user.js": ["Fundist"],
     "Cashback.user.js": ["Fundist"],
@@ -26,7 +26,7 @@
     "HelpDesk24h.user.js": ["Helpdesk"],
     "Helpdeskcheck.user.js": ["Helpdesk"],
     "QuickLink.user.js": ["Fundist"],
-    "ShadowDOM.user.js": ["LiveChat"],
+    "ShadowDOM.user.js": ["ChatWood"],
     "SumDep.user.js": ["Fundist"],
     "МСК-Time.user.js": ["Fundist"],
     "TimeInSecondsLiveChat.user.js": ["LiveChat"] 
