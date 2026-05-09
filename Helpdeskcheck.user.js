@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Helpdesk: Дубль и Чек
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Автоматизация рутинных задач в Helpdesk
 // @author       Calvin
 // @match        https://app.helpdesk.com/tickets/*
@@ -16,7 +16,50 @@
     // Вспомогательная функция для пауз
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Умное ожидание появления активной кнопки Submit (до 5 секунд)
+    // Функция определения названия проекта
+    function getProjectName() {
+        let casinoName = "";
+        const teamElement = document.querySelector('[data-testid="assigned-team"] p');
+
+        if (teamElement) {
+            const teamText = teamElement.textContent.trim();
+            const projects = ['Kent', 'Gama', 'R7', 'Kometa', 'Mers', 'Daddy', 'Arkada'];
+
+            for (let proj of projects) {
+                if (teamText.includes(proj)) {
+                    casinoName = proj;
+                    break;
+                }
+            }
+
+            if (teamText.includes('CatCasino') || teamText.includes('Cat')) {
+                casinoName = 'Cat';
+            }
+        }
+
+        return casinoName || "[Название не определено]";
+    }
+
+    // Управление приватным режимом
+    async function setPrivateMode(isPrivate) {
+        if (isPrivate) {
+            // Включаем приват (ищем switch-off и кликаем)
+            const switchOff = document.querySelector('[data-testid="switch-off"]');
+            if (switchOff) {
+                switchOff.click();
+                await sleep(300);
+            }
+        } else {
+            // Выключаем приват (ищем switch-on и кликаем)
+            const switchOn = document.querySelector('[data-testid="switch-on"]');
+            if (switchOn) {
+                switchOn.click();
+                await sleep(300);
+            }
+        }
+    }
+
+    // Умное ожидание появления активной кнопки Submit
     async function waitForActiveSubmit(timeout = 5000) {
         const start = Date.now();
         while (Date.now() - start < timeout) {
@@ -32,7 +75,7 @@
         return null;
     }
 
-    // Функция для вставки текста в редактор
+    // Функция для клика и вставки текста в редактор
     async function pasteTextToEditor(text) {
         const editor = document.getElementById('rich-text-area');
         if (!editor) {
@@ -40,8 +83,13 @@
             return false;
         }
 
+        // 1. Сначала кликаем по строке ввода текста
+        editor.click();
+        await sleep(100);
         editor.focus();
+        await sleep(100);
 
+        // 2. Имитируем вставку текста (Ctrl+V)
         const dataTransfer = new DataTransfer();
         dataTransfer.setData('text/plain', text);
         const pasteEvent = new ClipboardEvent('paste', {
@@ -53,6 +101,7 @@
 
         await sleep(200);
 
+        // Резервный вариант, если paste не сработал
         if (editor.textContent.trim() === '') {
             document.execCommand('insertText', false, text);
             editor.dispatchEvent(new Event('input', { bubbles: true }));
@@ -63,7 +112,6 @@
 
     // Универсальная функция для смены статуса тикета
     async function changeTicketStatus(desiredStatus) {
-        // Ищем текст 'Ticket status', затем берем кнопку рядом с ним
         const statusLabels = Array.from(document.querySelectorAll('p')).filter(p => p.textContent.includes('Ticket status'));
         if (statusLabels.length > 0) {
             const statusButtonContainer = statusLabels[0].nextElementSibling;
@@ -81,15 +129,13 @@
 
                 if (option) {
                     option.click();
-                    await sleep(1000); // Ждем применения статуса
-                } else {
-                    console.warn(`Статус "${desiredStatus}" не найден в списке!`);
+                    await sleep(1000);
                 }
             }
         }
     }
 
-    // Функция для создания наших кнопок
+    // Функция для создания кнопок интерфейса
     function injectButtons() {
         if (document.getElementById('custom-helpdesk-tools')) return;
 
@@ -102,74 +148,57 @@
         container.style.display = 'flex';
         container.style.flexDirection = 'column';
         container.style.gap = '10px';
-        container.style.width = '60px';
+        container.style.width = '80px'; // Чуть расширил, чтобы влезло длинное слово
 
-        const btnDouble = document.createElement('button');
-        btnDouble.innerText = 'Дубль';
-        btnDouble.style.padding = '8px';
-        btnDouble.style.cursor = 'pointer';
-        btnDouble.style.backgroundColor = '#4CAF50';
-        btnDouble.style.color = 'white';
-        btnDouble.style.border = 'none';
-        btnDouble.style.borderRadius = '4px';
-        btnDouble.onclick = handleDouble;
+        const createBtn = (text, color, handler) => {
+            const btn = document.createElement('button');
+            btn.innerText = text;
+            btn.style.padding = '8px';
+            btn.style.cursor = 'pointer';
+            btn.style.backgroundColor = color;
+            btn.style.color = 'white';
+            btn.style.border = 'none';
+            btn.style.borderRadius = '4px';
+            btn.onclick = handler;
+            return btn;
+        };
 
-        const btnCheck = document.createElement('button');
-        btnCheck.innerText = 'чек';
-        btnCheck.style.padding = '8px';
-        btnCheck.style.cursor = 'pointer';
-        btnCheck.style.backgroundColor = '#2196F3';
-        btnCheck.style.color = 'white';
-        btnCheck.style.border = 'none';
-        btnCheck.style.borderRadius = '4px';
-        btnCheck.onclick = handleCheck;
+        const btnDouble = createBtn('Дубль', '#4CAF50', handleDouble);       // Зеленый
+        const btnCheck = createBtn('чек', '#2196F3', handleCheck);         // Синий
+        const btnPragmatic = createBtn('Pragmatic', '#FF9800', handlePragmatic); // Оранжевый
 
         container.appendChild(btnDouble);
         container.appendChild(btnCheck);
+        container.appendChild(btnPragmatic);
         document.body.appendChild(container);
     }
 
     setInterval(injectButtons, 2000);
 
-    // Логика для кнопки "чек"
+    // Логика "Pragmatic"
+    async function handlePragmatic() {
+        try {
+            const casinoName = getProjectName();
+            const messageText = `Сообщаем вам, что на данный момент у провайдера Pragmatic Play ведутся технические работы.\n\nПриносим свои извинения от лица проекта за предоставленные неудобства.\n\nДля получения мгновенных ответов на ваши вопросы, обращайтесь в службу поддержки на сайте!\nС уважением, команда ${casinoName} Casino!`;
+
+            await setPrivateMode(false); // Выключаем приват (публичный ответ)
+            await pasteTextToEditor(messageText);
+            await changeTicketStatus('Closed');
+
+        } catch (err) {
+            console.error('Ошибка в скрипте (кнопка Pragmatic):', err);
+            alert('Произошла ошибка, загляни в консоль (F12)');
+        }
+    }
+
+    // Логика "чек"
     async function handleCheck() {
         try {
-            let casinoName = "";
-            const teamElement = document.querySelector('[data-testid="assigned-team"] p');
+            const casinoName = getProjectName();
+            const messageText = `Для дальнейшего рассмотрения вашего запроса, предоставьте, пожалуйста, следующую информацию:\n\nСправку/чек/квитанцию из банка с финальным (успешным) статусом платежа в ФОРМАТЕ PDF. Квитанцию вы можете найти в разделе "История операций". Она должна содержать:\n- дату и время платежа;\n- сумму;\n- реквизиты отправителя и получателя.\n\nС уважением, команда ${casinoName} Casino.`;
 
-            if (teamElement) {
-                const teamText = teamElement.textContent.trim();
-                const projects = ['Kent', 'Gama', 'R7', 'Kometa', 'Mers', 'Daddy', 'Arkada'];
-
-                for (let proj of projects) {
-                    if (teamText.includes(proj)) {
-                        casinoName = proj;
-                        break;
-                    }
-                }
-
-                if (teamText.includes('CatCasino') || teamText.includes('Cat')) {
-                    casinoName = 'Cat';
-                }
-            }
-
-            if (!casinoName) {
-                casinoName = "[Название не определено]";
-            }
-
-            const messageText = `Для дальнейшего рассмотрения вашего запроса, предоставьте, пожалуйста, следующую информацию:
-
-Справку/чек/квитанцию из банка с финальным (успешным) статусом платежа в ФОРМАТЕ PDF. Квитанцию вы можете найти в разделе "История операций". Она должна содержать:
-- дату и время платежа;
-- сумму;
-- реквизиты отправителя и получателя.
-
-С уважением, команда ${casinoName} Casino.`;
-
-            // 1. Вставляем текст
+            await setPrivateMode(false); // Выключаем приват
             await pasteTextToEditor(messageText);
-
-            // 2. Меняем статус на On hold
             await changeTicketStatus('On hold');
 
         } catch (err) {
@@ -178,16 +207,12 @@
         }
     }
 
-    // Логика для кнопки "Дубль"
+    // Логика "Дубль"
     async function handleDouble() {
         try {
             const textToPaste = await navigator.clipboard.readText();
 
-            const switchOff = document.querySelector('[data-testid="switch-off"]');
-            if (switchOff) {
-                switchOff.click();
-                await sleep(500);
-            }
+            await setPrivateMode(true); // Включаем приват
 
             const isPasted = await pasteTextToEditor(textToPaste);
             if (!isPasted) return;
@@ -201,13 +226,7 @@
                 return;
             }
 
-            const switchOn = document.querySelector('[data-testid="switch-on"]');
-            if (switchOn) {
-                switchOn.click();
-                await sleep(500);
-            }
-
-            // Меняем статус на Closed (используем нашу новую общую функцию)
+            await setPrivateMode(false); // Снова выключаем приват для статуса
             await changeTicketStatus('Closed');
 
             submitBtn = await waitForActiveSubmit(3000);
