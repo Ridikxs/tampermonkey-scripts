@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BonusCheckerPro
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      2.0
 // @description  Проверка бонусов для продажи
 // @author       Calvin
 // @match        *://*.fundist.org/*
@@ -24,7 +24,7 @@
 (function () {
     'use strict';
 
-    // 1. Полная база данных бонусов с добавленными тегами
+    // 1. Полная база данных бонусов с тегами
     const bonusData = {
         'Catcasino': [
             { id: '261062', shortName: 'Лутбокс', fullName: 'Лутбокс (деп 500)', dep: '500', cash: '5 000', fs: '150', tag: 'Sales_SUPP_Other_1' },
@@ -83,37 +83,22 @@
 
     let currentUserId = null;
 
-    // Управление шаблонами
     function getTemplates(projectName) {
         const key = 'bc_templates_' + projectName;
         let data = GM_getValue(key);
         if (data) return JSON.parse(data);
 
         let defaultTpls = [
-            {
-                id: 'tpl_std',
-                name: '💬 Стандарт',
-                text: 'Отлично, с вашим основным вопросом мы успешно разобрались! А чтобы сделать вашу следующую сессию по-настоящему захватывающей и добавить максимум драйва, у меня есть для вас особенное предложение с огромным потенциалом.\n\nПредлагаю обратить внимание на наш эксклюзивный {имя}! При пополнении всего от {деп} RUB у вас появляется шикарный шанс забрать {награда1} и целых {фс} фриспинов в хитовых слотах от топового провайдера Pragmatic Play. Самый главный плюс этого предложения — отыгрыш доступен как с реального, так и с бонусного баланса, что делает процесс максимально комфортным и свободным. Согласитесь, перспективы просто отличные! Активируем этот Лутбокс для вас прямо сейчас?'
-            },
-            {
-                id: 'tpl_nodep',
-                name: '🎁 Бездеп',
-                text: 'Отличный выбор, бездепы — это всегда круто, однако в чате их нет. Давайте расскажу, как их можно получить! Во-первых, загляните в наш магазин на сайте — там можно легко обменивать накопленные коины на бонусы. Во-вторых, обязательно присоединяйтесь к нашему Telegram-каналу, где мы регулярно раздаем промокоды на бездепы. Ну и, конечно, вижу, что вам доступны рассылки — просто следите за почтой и WhatsApp, уверен, промо-отдел скоро вас порадует.\n\nА пока мы ожидаем подходящее предложение, от себя лично очень рекомендую шикарную альтернативу прямо сейчас — наш {имя}! При пополнении всего на {деп} RUB у вас есть шанс забрать {награда2} и целых {фс} фриспинов в хитовых играх от топового провайдера Pragmatic Play. Главный плюс этого предложения в том, что отыгрыш идет как с реального, так и с бонусного баланса, что делает игру максимально комфортной. Согласитесь, отличный вариант! Активируем этот лутбокс для вас?'
-            },
-            {
-                id: 'tpl_obj',
-                name: '❓ Возражение',
-                text: 'Понимаю вас, тоже люблю бездепозитные бонусы, однако в чате их действительно нет. А если откровенно, почему рассматриваете исключительно такой формат? Чем именно вас смутило предложение с Лутбоксом?'
-            }
+            { id: 'tpl_std', name: '💬 Стандарт', text: 'Отлично, с вашим основным вопросом мы успешно разобрались! А чтобы сделать вашу следующую сессию по-настоящему захватывающей и добавить максимум драйва, у меня есть для вас особенное предложение с огромным потенциалом.\n\nПредлагаю обратить внимание на наш эксклюзивный {имя}! При пополнении всего от {деп} RUB у вас появляется шикарный шанс забрать {награда1} и целых {фс} фриспинов в хитовых слотах от топового провайдера Pragmatic Play. Самый главный плюс этого предложения — отыгрыш доступен как с реального, так и с бонусного баланса, что делает процесс максимально комфортным и свободным. Согласитесь, перспективы просто отличные! Активируем этот Лутбокс для вас прямо сейчас?' },
+            { id: 'tpl_nodep', name: '🎁 Бездеп', text: 'Отличный выбор, бездепы — это всегда круто, однако в чате их нет. Давайте расскажу, как их можно получить! Во-первых, загляните в наш магазин на сайте — там можно легко обменивать накопленные коины на бонусы. Во-вторых, обязательно присоединяйтесь к нашему Telegram-каналу, где мы регулярно раздаем промокоды на бездепы. Ну и, конечно, вижу, что вам доступны рассылки — просто следите за почтой и WhatsApp, уверен, промо-отдел скоро вас порадует.\n\nА пока мы ожидаем подходящее предложение, от себя лично очень рекомендую шикарную альтернативу прямо сейчас — наш {имя}! При пополнении всего на {деп} RUB у вас есть шанс забрать {награда2} и целых {фс} фриспинов в хитовых играх от топового провайдера Pragmatic Play. Главный плюс этого предложения в том, что отыгрыш идет как с реального, так и с бонусного баланса, что делает игру максимально комфортной. Согласитесь, отличный вариант! Активируем этот лутбокс для вас?' },
+            { id: 'tpl_obj', name: '❓ Возражение', text: 'Понимаю вас, тоже люблю бездепозитные бонусы, однако в чате их действительно нет. А если откровенно, почему рассматриваете исключительно такой формат? Чем именно вас смутило предложение с Лутбоксом?' }
         ];
-
         GM_setValue(key, JSON.stringify(defaultTpls));
         return defaultTpls;
     }
 
     function saveTemplates(projectName, templates) {
-        const key = 'bc_templates_' + projectName;
-        GM_setValue(key, JSON.stringify(templates));
+        GM_setValue('bc_templates_' + projectName, JSON.stringify(templates));
     }
 
     function detectProject() {
@@ -175,13 +160,9 @@
             if(!name || !text) return alert("Заполни название и текст!");
 
             let tpls = getTemplates(projectName);
-
             if (editId) {
                 const idx = tpls.findIndex(t => t.id === editId);
-                if(idx !== -1) {
-                    tpls[idx].name = name;
-                    tpls[idx].text = text;
-                }
+                if(idx !== -1) { tpls[idx].name = name; tpls[idx].text = text; }
             } else {
                 tpls.push({ id: 'tpl_' + Date.now().toString(), name, text });
             }
@@ -196,13 +177,10 @@
 
         document.getElementById('bc-settings-panel').addEventListener('click', (e) => {
             const projectName = detectProject() || 'Неизвестно';
-
             if(e.target.classList.contains('bc-del-tpl')) {
                 if(!confirm("Удалить этот шаблон?")) return;
                 const id = e.target.getAttribute('data-id');
-                let tpls = getTemplates(projectName);
-                tpls = tpls.filter(t => t.id !== id);
-                saveTemplates(projectName, tpls);
+                saveTemplates(projectName, getTemplates(projectName).filter(t => t.id !== id));
                 renderSettingsList();
                 refreshBonusList();
             }
@@ -213,7 +191,6 @@
                     document.getElementById('bc-tpl-id').value = tpl.id;
                     document.getElementById('bc-tpl-name').value = tpl.name;
                     document.getElementById('bc-tpl-text').value = tpl.text;
-
                     document.getElementById('bc-tpl-add').innerText = '💾 Сохранить';
                     document.getElementById('bc-tpl-add').style.background = '#10b981';
                     document.getElementById('bc-tpl-cancel').style.display = 'block';
@@ -258,10 +235,7 @@
         if(currentUserId && projName) checkBonusesInBackground(currentUserId, projName);
     }
 
-    // Слушатель глобальных кликов (копирование шаблонов и ТЕГОВ)
     document.addEventListener('click', function(e) {
-
-        // Обработка клика по кнопке копирования шаблона
         if (e.target && e.target.classList.contains('copy-template-btn')) {
             const tplId = e.target.getAttribute('data-tpl-id');
             const bonusId = e.target.getAttribute('data-id');
@@ -302,10 +276,8 @@
             });
         }
 
-        // Обработка клика по ТЕГУ
         if (e.target && e.target.classList.contains('copy-tag-btn')) {
             const tagValue = e.target.getAttribute('data-tag');
-
             navigator.clipboard.writeText(tagValue).then(() => {
                 const origText = e.target.innerText;
                 const origColor = e.target.style.color;
@@ -332,6 +304,10 @@
             resultEl.innerHTML = `<span style="color:red;">База бонусов для проекта ${projectName} не найдена.</span>`;
             return;
         }
+
+        // Парсинг активных тегов профиля
+        const tagElements = document.querySelectorAll('#tags-wrapper .name');
+        const userTags = Array.from(tagElements).map(el => el.textContent.trim());
 
         const nowUtcMs = Date.now();
         const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -390,6 +366,7 @@
             results.forEach(res => {
                 const b = res.bonus;
                 const actMs = res.lastActivationMs;
+                const hasTag = userTags.includes(b.tag);
 
                 let isAvailable = true;
                 let infoHtml = '';
@@ -415,7 +392,6 @@
                     infoHtml = `Никогда не выдавался`;
                 }
 
-                // Верстка информации о бонусе, включая кликабельный тег
                 const tagHtml = `<span class="copy-tag-btn" data-tag="${b.tag}" style="cursor:pointer; color:#0ea5e9; text-decoration:underline; font-weight:bold;" title="Нажми, чтобы скопировать тег">${b.tag}</span>`;
 
                 if (isAvailable) {
@@ -425,18 +401,38 @@
                         btnsHtml += `<button class="copy-template-btn" style="${btnStyle} ${bgStyle}" data-tpl-id="${t.id}" data-id="${b.id}" data-proj="${projectName}">${t.name}</button>`;
                     });
 
-                    htmlResult += `
-                    <li style="margin-bottom: 8px; padding: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
-                        <b style="color: #15803d; display:block;">✅ ${b.fullName}</b>
-                        <div style="display:flex; justify-content:space-between; align-items: flex-end; margin-top:4px;">
-                            <span style="font-size:11px; color:#475569;">ID: ${b.id} | Тег: ${tagHtml}</span>
-                            <span style="font-size:11px; color:#10b981; font-weight:bold; text-align:right; line-height:1.4;">${infoHtml}</span>
-                        </div>
-                        <div style="margin-top: 8px; border-top: 1px dashed #bbf7d0; padding-top: 6px; display:flex; flex-wrap:wrap;">
-                            ${btnsHtml}
-                        </div>
-                    </li>`;
+                    if (hasTag) {
+                        // СИНИЙ БЛОК: Доступен и тег висит на профиле
+                        htmlResult += `
+                        <li style="margin-bottom: 8px; padding: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;">
+                            <b style="color: #1d4ed8; display:block;">🔹 ${b.fullName}</b>
+                            <div style="display:flex; justify-content:space-between; align-items: flex-end; margin-top:4px;">
+                                <span style="font-size:11px; color:#475569;">ID: ${b.id} | Тег: ${tagHtml}</span>
+                                <span style="font-size:11px; color:#0284c7; font-weight:bold; text-align:right; line-height:1.4;">
+                                    Присвоен тег! Бонус не был использован.<br>
+                                    <span style="font-weight:normal;">${infoHtml}</span>
+                                </span>
+                            </div>
+                            <div style="margin-top: 8px; border-top: 1px dashed #bfdbfe; padding-top: 6px; display:flex; flex-wrap:wrap;">
+                                ${btnsHtml}
+                            </div>
+                        </li>`;
+                    } else {
+                        // ЗЕЛЕНЫЙ БЛОК: Доступен, тега на профиле нет
+                        htmlResult += `
+                        <li style="margin-bottom: 8px; padding: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
+                            <b style="color: #15803d; display:block;">✅ ${b.fullName}</b>
+                            <div style="display:flex; justify-content:space-between; align-items: flex-end; margin-top:4px;">
+                                <span style="font-size:11px; color:#475569;">ID: ${b.id} | Тег: ${tagHtml}</span>
+                                <span style="font-size:11px; color:#10b981; font-weight:bold; text-align:right; line-height:1.4;">${infoHtml}</span>
+                            </div>
+                            <div style="margin-top: 8px; border-top: 1px dashed #bbf7d0; padding-top: 6px; display:flex; flex-wrap:wrap;">
+                                ${btnsHtml}
+                            </div>
+                        </li>`;
+                    }
                 } else {
+                    // КРАСНЫЙ БЛОК: Недоступен (недавно использован)
                     htmlResult += `
                     <li style="margin-bottom: 8px; padding: 8px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;">
                         <b style="color: #b91c1c; display:block;">❌ ${b.fullName}</b>
