@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ProfitLossCalculator
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @author       Calvin
 // @match        *://*.fundist.org/*
 // @match        *://backoffice.r7.casino/*
@@ -14,8 +14,8 @@
 // @match        *://backoffice.arkada.casino/*
 // @match        *://*.boadmin.org/*
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ProfitLossCalculator.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ProfitLossCalculator.user.js
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Profit/LossCalculator.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Profit/LossCalculator.user.js
 // ==/UserScript==
 
 (function() {
