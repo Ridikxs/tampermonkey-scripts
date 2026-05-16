@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ProfitLossCalculator
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @author       Calvin
 // @match        *://*.fundist.org/*
 // @match        *://backoffice.r7.casino/*
