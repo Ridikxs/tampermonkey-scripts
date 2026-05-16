@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BonusCheckerPro
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Проверка бонусов для продажи
 // @author       Calvin
 // @match        *://*.fundist.org/*
@@ -24,7 +24,7 @@
 (function () {
     'use strict';
 
-    // 1. Полная база данных бонусов с тегами
+    // --- БАЗА ДАННЫХ БОНУСОВ ---
     const bonusData = {
         'Catcasino': [
             { id: '261062', shortName: 'Лутбокс', fullName: 'Лутбокс (деп 500)', dep: '500', cash: '5 000', fs: '150', tag: 'Sales_SUPP_Other_1' },
@@ -81,8 +81,19 @@
         ]
     };
 
+    // --- ЧЕРНЫЙ СПИСОК ТЕГОВ ---
+    const forbiddenTagsList = [
+        'cheater',
+        'bonushunter',
+        'streamer',
+        'bonushunterfraudname',
+        'full restriction',
+        'duplicate - phone'
+    ];
+
     let currentUserId = null;
 
+    // --- УПРАВЛЕНИЕ ШАБЛОНАМИ ---
     function getTemplates(projectName) {
         const key = 'bc_templates_' + projectName;
         let data = GM_getValue(key);
@@ -107,6 +118,7 @@
         return el.textContent.trim().split(/\s|→/)[0] || null;
     }
 
+    // --- СОЗДАНИЕ ИНТЕРФЕЙСА ---
     function createUI(targetContainer) {
         if (!targetContainer) return;
         const div = document.createElement("div");
@@ -146,6 +158,7 @@
         `;
         targetContainer.appendChild(div);
 
+        // Обработчики кнопок настроек
         document.getElementById('bc-settings-toggle').addEventListener('click', () => {
             const panel = document.getElementById('bc-settings-panel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
@@ -235,6 +248,7 @@
         if(currentUserId && projName) checkBonusesInBackground(currentUserId, projName);
     }
 
+    // --- ОБРАБОТЧИКИ КЛИКОВ (Шаблоны и Теги) ---
     document.addEventListener('click', function(e) {
         if (e.target && e.target.classList.contains('copy-template-btn')) {
             const tplId = e.target.getAttribute('data-tpl-id');
@@ -295,6 +309,7 @@
         }
     });
 
+    // --- ГЛАВНАЯ ЛОГИКА ПРОВЕРКИ ---
     async function checkBonusesInBackground(userId, projectName) {
         const resultEl = document.getElementById("bonus-checker-result");
         if (!resultEl) return;
@@ -305,9 +320,25 @@
             return;
         }
 
-        // Парсинг активных тегов профиля
+        // 1. Собираем теги профиля
         const tagElements = document.querySelectorAll('#tags-wrapper .name');
         const userTags = Array.from(tagElements).map(el => el.textContent.trim());
+        const foundForbiddenTags = userTags.filter(tag => forbiddenTagsList.includes(tag.toLowerCase()));
+
+        // 2. ИЩЕМ ДУБЛИКАТ ПО ТЕЛЕФОНУ
+        const exclusionSpan = document.getElementById("ExlusionStatusStr");
+        const hasPhoneDuplicate = exclusionSpan && exclusionSpan.textContent.toLowerCase().includes("телефон");
+
+        // 3. Формируем список причин блокировки
+        let blockReasons = [];
+        if (foundForbiddenTags.length > 0) {
+            blockReasons.push(`Тег: ${foundForbiddenTags.join(', ')}`);
+        }
+        if (hasPhoneDuplicate) {
+            blockReasons.push(`Дубликат по Телефону`);
+        }
+
+        const isUserBlocked = blockReasons.length > 0;
 
         const nowUtcMs = Date.now();
         const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
@@ -363,6 +394,15 @@
             const allTpls = getTemplates(projectName);
             const btnStyle = "cursor:pointer; padding:3px 8px; margin-right:4px; margin-top:4px; font-size:11px; border-radius:4px; border:1px solid #cbd5e1; background:#f8fafc; color:#334155; font-weight:bold; transition: 0.2s;";
 
+            // --- ОТРИСОВКА ПРЕДУПРЕЖДЕНИЯ О БЛОКИРОВКЕ ---
+            if (isUserBlocked) {
+                htmlResult += `
+                <div style="margin-bottom: 10px; padding: 10px; background: #fef2f2; border: 2px solid #ef4444; border-radius: 6px; text-align: center;">
+                    <b style="color: #b91c1c; font-size: 14px;">⛔ ВЫДАЧА БОНУСОВ ЗАПРЕЩЕНА</b><br>
+                    <span style="color: #991b1b; font-size: 12px;">Причина: <b>${blockReasons.join(' | ')}</b></span>
+                </div>`;
+            }
+
             results.forEach(res => {
                 const b = res.bonus;
                 const actMs = res.lastActivationMs;
@@ -392,6 +432,12 @@
                     infoHtml = `Никогда не выдавался`;
                 }
 
+                // ПРИМЕНЕНИЕ БЛОКИРОВКИ: Переопределяем статус, если юзер заблокирован
+                if (isUserBlocked) {
+                    isAvailable = false;
+                    infoHtml = `🚫 Заблокировано: <b style="color:#b91c1c;">${blockReasons.join(' | ')}</b>`;
+                }
+
                 const tagHtml = `<span class="copy-tag-btn" data-tag="${b.tag}" style="cursor:pointer; color:#0ea5e9; text-decoration:underline; font-weight:bold;" title="Нажми, чтобы скопировать тег">${b.tag}</span>`;
 
                 if (isAvailable) {
@@ -402,7 +448,7 @@
                     });
 
                     if (hasTag) {
-                        // СИНИЙ БЛОК: Доступен и тег висит на профиле
+                        // СИНИЙ БЛОК: Доступен + Присвоен тег
                         htmlResult += `
                         <li style="margin-bottom: 8px; padding: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;">
                             <b style="color: #1d4ed8; display:block;">🔹 ${b.fullName}</b>
@@ -418,7 +464,7 @@
                             </div>
                         </li>`;
                     } else {
-                        // ЗЕЛЕНЫЙ БЛОК: Доступен, тега на профиле нет
+                        // ЗЕЛЕНЫЙ БЛОК: Доступен, тега нет
                         htmlResult += `
                         <li style="margin-bottom: 8px; padding: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
                             <b style="color: #15803d; display:block;">✅ ${b.fullName}</b>
@@ -432,7 +478,7 @@
                         </li>`;
                     }
                 } else {
-                    // КРАСНЫЙ БЛОК: Недоступен (недавно использован)
+                    // КРАСНЫЙ БЛОК: Недоступен (по времени или из-за блокировки)
                     htmlResult += `
                     <li style="margin-bottom: 8px; padding: 8px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;">
                         <b style="color: #b91c1c; display:block;">❌ ${b.fullName}</b>
