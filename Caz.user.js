@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.0
 // @description  Отдыхай когда нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -16,7 +16,6 @@
 (function() {
     'use strict';
 
-    // === КОНФИГ И СТЭЙТ ===
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
     let balance = Math.round((GM_getValue("operator_coins", 1000)) * 10) / 10;
@@ -24,7 +23,6 @@
     let hasCalvinScript = GM_getValue("operator_has_vip", false);
     let hasBinance = GM_getValue("operator_has_binance", false);
 
-    // Хранилище ID обработанных событий (сообщения + системные уведомления)
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
 
@@ -40,7 +38,6 @@
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
-    // === МАТЕМАТИКА И ВОЛАТИЛЬНОСТЬ ===
     function getDynamicStrip(isBonus, index) {
         const v = index / (BET_STEPS.length - 1);
         const multWild = 50 + Math.floor(v * 100);
@@ -69,7 +66,6 @@
         }
     }
 
-    // === СТИЛИ ===
     GM_addStyle(`
         .sparkmoth-casino-logo { cursor: pointer !important; transition: all 0.3s ease; position: relative; }
         .sparkmoth-casino-logo:hover { transform: scale(1.15); filter: drop-shadow(0 0 5px #b4befe); }
@@ -141,7 +137,6 @@
         return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
     }
 
-    // === ИНТЕРФЕЙС ===
     const modal = document.createElement('div');
     modal.id = 'slot-modal';
     modal.innerHTML = `
@@ -196,7 +191,6 @@
     const btnBetDown = document.getElementById('btn-bet-down');
     const btnBetMax = document.getElementById('btn-bet-max');
 
-    // === ДРАГ-Н-ДРОП ===
     const dragHandle = document.getElementById('modal-drag-handle');
     let isDragging = false, dragStartX, dragStartY;
 
@@ -218,7 +212,6 @@
     });
     document.addEventListener('mouseup', () => { isDragging = false; });
 
-    // === ЛОГИКА ===
     function logHistory(amount, type) {
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
@@ -448,7 +441,6 @@
         }
     }
 
-    // === СОБЫТИЯ КНОПОК ===
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
@@ -473,22 +465,18 @@
     };
 
 
-    // === ИДЕНТИФИКАЦИЯ ТЕКУЩЕГО ОПЕРАТОРА ===
     function getMyOperatorNames() {
-        const names = ['calvin', 'келвин']; // Базовые хардкод-имена
+        const names = ['calvin', 'келвин'];
 
-        // Имя из панели (если есть)
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
         if (profileNameEl) names.push(profileNameEl.innerText.trim().toLowerCase());
 
-        // Alt картинки профиля
         const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
         if (profileImg) names.push(profileImg.alt.trim().toLowerCase());
 
         return names;
     }
 
-    // Проверка принадлежности обычного сообщения
     function isMyMessage(msgElement) {
         if (!msgElement.classList.contains('justify-end')) return false;
 
@@ -500,7 +488,6 @@
         return myNames.includes(msgName);
     }
 
-    // === ФУНКЦИЯ ПАРСИНГА АКТИВНОСТЕЙ ===
     function scanForActivities() {
         let hasNew = false;
         const myNames = getMyOperatorNames();
@@ -510,11 +497,9 @@
             const msgId = msgElement.getAttribute('data-message-id');
             const updatedAtStr = msgElement.getAttribute('updatedat');
 
-            // Проверка на сформированность события
             if (!msgId || !/^\d+$/.test(msgId) || !updatedAtStr) return;
             if (processedEventIds.has(msgId)) return;
 
-            // Защита от начисления за старые события при переключении диалогов (лимит 5 минут)
             const msgTime = new Date(updatedAtStr).getTime();
             if (Date.now() - msgTime > 300000) {
                 processedEventIds.add(msgId);
@@ -522,7 +507,6 @@
                 return;
             }
 
-            // 1. ИЩЕМ СООБЩЕНИЯ ОПЕРАТОРА (0.1 коин)
             if (msgElement.classList.contains('justify-end')) {
                 if (isMyMessage(msgElement)) {
                     updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)");
@@ -530,15 +514,13 @@
                 processedEventIds.add(msgId);
                 hasNew = true;
             }
-            // 2. ИЩЕМ СИСТЕМНЫЕ УВЕДОМЛЕНИЯ О ТЕГАХ (+/- 0.5 коин)
+
             else if (msgElement.classList.contains('justify-center')) {
                 const sysNotif = msgElement.querySelector('span[title*="добавил"], span[title*="удалил"]');
                 if (sysNotif) {
                     const titleText = sysNotif.getAttribute('title').toLowerCase();
                     const isAdded = titleText.includes('добавил');
                     const isRemoved = titleText.includes('удалил');
-
-                    // Проверяем, касается ли уведомление именно ВАШЕГО тега продажи
                     let mySaleTagFound = false;
                     for (let name of myNames) {
                         if (titleText.includes(`${name}-продажа`)) {
@@ -549,13 +531,11 @@
 
                     if (mySaleTagFound) {
                         if (isAdded) {
-                            // Начисляем только если ВЫ сами добавили тег
                             const actionAuthor = titleText.split(' ')[0];
                             if (myNames.includes(actionAuthor)) {
                                 updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)");
                             }
                         } else if (isRemoved) {
-                            // Штраф, если кто угодно (вы, другой опер или QA) удалил ваш тег продажи
                             updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)");
                         }
                     }
@@ -563,13 +543,11 @@
                 processedEventIds.add(msgId);
                 hasNew = true;
             } else {
-                // Сообщения клиентов просто закидываем в кэш
                 processedEventIds.add(msgId);
                 hasNew = true;
             }
         });
 
-        // Сохраняем кэш событий
         if (hasNew) {
             let arr = Array.from(processedEventIds);
             if (arr.length > 500) arr = arr.slice(-500);
@@ -577,7 +555,6 @@
         }
     }
 
-    // === MUTATION OBSERVER ===
     let logoReplaced = false;
     const observer = new MutationObserver(((mutations, obs) => {
         const img = document.querySelector(LOGO_IMG_SELECTOR);
@@ -599,7 +576,6 @@
             logoReplaced = false;
         }
 
-        // Сканирование на новые активности
         scanForActivities();
     }));
 
