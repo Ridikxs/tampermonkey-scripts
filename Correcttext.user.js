@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Correcttext
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Корректор грамматики
 // @author       Calvin
 // @match        *://*/*
