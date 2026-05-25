@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Отдыхай когда нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -18,7 +18,7 @@
 
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
-    let balance = Math.round((GM_getValue("operator_coins", 1000)) * 10) / 10;
+    let balance = Math.round((GM_getValue("operator_coins", 100)) * 10) / 10;
     let historyLog = GM_getValue("operator_history", []);
     let hasCalvinScript = GM_getValue("operator_has_vip", false);
     let hasBinance = GM_getValue("operator_has_binance", false);
