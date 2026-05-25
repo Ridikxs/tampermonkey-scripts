@@ -3,6 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  Корректор грамматики
+// @author       Calvin
 // @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Correcttext.user.js
