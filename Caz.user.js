@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      2.5
-// @description  Анти-абуз: штраф -0.5 за удаление тега продажи любым оператором. Полное удаление читов и тестовых кнопок.
+// @version      2.6
+// @description  Отдыхай когда нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_addStyle
