@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BonusCheckerPro
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Проверка бонусов для продажи
 // @author       Calvin
 // @match        *://*.fundist.org/*
