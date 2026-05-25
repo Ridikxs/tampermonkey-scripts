@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Обновленные цены: Скрипт - 1кк, Binance - 100кк.
+// @version      2.5
+// @description  Анти-абуз: штраф -0.5 за удаление тега продажи любым оператором. Полное удаление читов и тестовых кнопок.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_addStyle
@@ -19,10 +19,14 @@
     // === КОНФИГ И СТЭЙТ ===
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
-    let balance = GM_getValue("operator_coins", 1000);
+    let balance = Math.round((GM_getValue("operator_coins", 1000)) * 10) / 10;
     let historyLog = GM_getValue("operator_history", []);
     let hasCalvinScript = GM_getValue("operator_has_vip", false);
     let hasBinance = GM_getValue("operator_has_binance", false);
+
+    // Хранилище ID обработанных событий (сообщения + системные уведомления)
+    let processedEventIdsArr = GM_getValue("operator_processed_events", []);
+    const processedEventIds = new Set(processedEventIdsArr);
 
     let isSpinning = false;
     let freeSpins = 0;
@@ -31,9 +35,10 @@
     let betIndex = 1;
     let activeBet = BET_STEPS[betIndex];
 
-    // Новые цены
-    const VIP_SCRIPT_COST = 1000000;       // 1 миллион
-    const BINANCE_COST    = 100000000;     // 100 миллионов
+    const VIP_SCRIPT_COST = 1000000;
+    const BINANCE_COST    = 100000000;
+    const COINS_PER_MESSAGE = 0.1;
+    const COINS_PER_TAG = 0.5;
 
     // === МАТЕМАТИКА И ВОЛАТИЛЬНОСТЬ ===
     function getDynamicStrip(isBonus, index) {
@@ -84,13 +89,12 @@
         .modal-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #313244; padding-bottom: 10px; cursor: grab; user-select: none; }
         .modal-header:active { cursor: grabbing; }
 
-        #modal-balance { font-weight: bold; color: #f9e2af; font-size: 18px; pointer-events: none;}
-        .header-controls { display: flex; gap: 8px; }
+        #modal-balance { font-weight: bold; color: #f9e2af; font-size: 18px; pointer-events: none; margin-right: auto;}
+        .header-controls { display: flex; gap: 8px; margin-left: 15px;}
 
         .tab-btn { background: #45475a; color: #cdd6f4; border: none; border-radius: 4px; padding: 5px 8px; cursor: pointer; font-size: 14px; }
         .tab-btn:hover { background: #585b70; }
         .close-btn { background: transparent; border: none; color: #f38ba8; font-size: 20px; cursor: pointer; padding: 0; line-height: 1;}
-        .test-btn { background: #89b4fa; color: #111; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: auto; margin-left: 10px;}
 
         .reels-container { display: flex; gap: 15px; margin: 10px 0; justify-content: center; width: 100%;}
         .reel { width: 80px; height: 80px; background: #11111b; border: 2px solid #45475a; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 40px; overflow: hidden; flex-shrink: 0; }
@@ -133,9 +137,8 @@
         @keyframes coinFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
     `);
 
-    // Вспомогательная функция для форматирования чисел (1 000 000)
     function formatNum(num) {
-        return num.toLocaleString('ru-RU');
+        return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
     }
 
     // === ИНТЕРФЕЙС ===
@@ -144,7 +147,6 @@
     modal.innerHTML = `
         <div class="modal-header" id="modal-drag-handle">
             <span id="modal-balance" title="Точный баланс: ${balance}">🪙 ${formatNum(balance)}</span>
-            <button class="test-btn" id="btn-test-add" title="Shift+Клик для +100 000 000">+1000</button>
             <div class="header-controls">
                 <button class="tab-btn" id="btn-hist" title="История">📜</button>
                 <button class="tab-btn" id="btn-shop" title="Магазин">🛒</button>
@@ -173,7 +175,7 @@
 
         <div id="slot-message">Выбери ставку!</div>
         <div class="slot-controls">
-            <button class="bonus-btn" id="btn-buy-bonus">Бонус (5000)</button>
+            <button class="bonus-btn" id="btn-buy-bonus">Бонус (${formatNum(5000)})</button>
             <button class="spin-btn" id="btn-spin">Spin</button>
         </div>
 
@@ -239,7 +241,7 @@
     function renderShop() {
         panelShop.innerHTML = `
             <div class="shop-item">
-                <span><b>Скрипт от Calvin</b> (Золотая рамка)</span>
+                <span><b>Скрипт от Calvin</b> (персональный по возможности)</span>
                 ${hasCalvinScript ? '<span style="color:#a6e3a1; font-weight:bold;">КУПЛЕНО ✔️</span>' : `<button class="buy-shop-btn" id="btn-buy-vip">Купить за ${formatNum(VIP_SCRIPT_COST)} 🪙</button>`}
             </div>
             <hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">
@@ -278,7 +280,7 @@
     renderShop();
 
     function updateBalance(amount, logType = null) {
-        balance += amount;
+        balance = Math.round((balance + amount) * 10) / 10;
         GM_setValue("operator_coins", balance);
         uiBalance.innerText = `🪙 ${formatNum(balance)}`;
         uiBalance.title = `Точный баланс: ${balance}`;
@@ -446,7 +448,7 @@
         }
     }
 
-    // === СОБЫТИЯ ===
+    // === СОБЫТИЯ КНОПОК ===
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
@@ -470,13 +472,110 @@
         }
     };
 
-    document.getElementById('btn-test-add').onclick = (e) => {
-        if (e.shiftKey) {
-            updateBalance(100000000, "Секретный чит-код"); // +100 млн
-        } else {
-            updateBalance(1000, "Тестовое начисление");
+
+    // === ИДЕНТИФИКАЦИЯ ТЕКУЩЕГО ОПЕРАТОРА ===
+    function getMyOperatorNames() {
+        const names = ['calvin', 'келвин']; // Базовые хардкод-имена
+
+        // Имя из панели (если есть)
+        const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
+        if (profileNameEl) names.push(profileNameEl.innerText.trim().toLowerCase());
+
+        // Alt картинки профиля
+        const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
+        if (profileImg) names.push(profileImg.alt.trim().toLowerCase());
+
+        return names;
+    }
+
+    // Проверка принадлежности обычного сообщения
+    function isMyMessage(msgElement) {
+        if (!msgElement.classList.contains('justify-end')) return false;
+
+        const msgImg = msgElement.querySelector('img');
+        const msgName = msgImg ? msgImg.alt.trim().toLowerCase() : '';
+        if (!msgName) return false;
+
+        const myNames = getMyOperatorNames();
+        return myNames.includes(msgName);
+    }
+
+    // === ФУНКЦИЯ ПАРСИНГА АКТИВНОСТЕЙ ===
+    function scanForActivities() {
+        let hasNew = false;
+        const myNames = getMyOperatorNames();
+
+        const messages = document.querySelectorAll('.message-bubble-container');
+        messages.forEach(msgElement => {
+            const msgId = msgElement.getAttribute('data-message-id');
+            const updatedAtStr = msgElement.getAttribute('updatedat');
+
+            // Проверка на сформированность события
+            if (!msgId || !/^\d+$/.test(msgId) || !updatedAtStr) return;
+            if (processedEventIds.has(msgId)) return;
+
+            // Защита от начисления за старые события при переключении диалогов (лимит 5 минут)
+            const msgTime = new Date(updatedAtStr).getTime();
+            if (Date.now() - msgTime > 300000) {
+                processedEventIds.add(msgId);
+                hasNew = true;
+                return;
+            }
+
+            // 1. ИЩЕМ СООБЩЕНИЯ ОПЕРАТОРА (0.1 коин)
+            if (msgElement.classList.contains('justify-end')) {
+                if (isMyMessage(msgElement)) {
+                    updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)");
+                }
+                processedEventIds.add(msgId);
+                hasNew = true;
+            }
+            // 2. ИЩЕМ СИСТЕМНЫЕ УВЕДОМЛЕНИЯ О ТЕГАХ (+/- 0.5 коин)
+            else if (msgElement.classList.contains('justify-center')) {
+                const sysNotif = msgElement.querySelector('span[title*="добавил"], span[title*="удалил"]');
+                if (sysNotif) {
+                    const titleText = sysNotif.getAttribute('title').toLowerCase();
+                    const isAdded = titleText.includes('добавил');
+                    const isRemoved = titleText.includes('удалил');
+
+                    // Проверяем, касается ли уведомление именно ВАШЕГО тега продажи
+                    let mySaleTagFound = false;
+                    for (let name of myNames) {
+                        if (titleText.includes(`${name}-продажа`)) {
+                            mySaleTagFound = true;
+                            break;
+                        }
+                    }
+
+                    if (mySaleTagFound) {
+                        if (isAdded) {
+                            // Начисляем только если ВЫ сами добавили тег
+                            const actionAuthor = titleText.split(' ')[0];
+                            if (myNames.includes(actionAuthor)) {
+                                updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)");
+                            }
+                        } else if (isRemoved) {
+                            // Штраф, если кто угодно (вы, другой опер или QA) удалил ваш тег продажи
+                            updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)");
+                        }
+                    }
+                }
+                processedEventIds.add(msgId);
+                hasNew = true;
+            } else {
+                // Сообщения клиентов просто закидываем в кэш
+                processedEventIds.add(msgId);
+                hasNew = true;
+            }
+        });
+
+        // Сохраняем кэш событий
+        if (hasNew) {
+            let arr = Array.from(processedEventIds);
+            if (arr.length > 500) arr = arr.slice(-500);
+            GM_setValue("operator_processed_events", arr);
         }
-    };
+    }
 
     // === MUTATION OBSERVER ===
     let logoReplaced = false;
@@ -499,20 +598,11 @@
         } else {
             logoReplaced = false;
         }
+
+        // Сканирование на новые активности
+        scanForActivities();
     }));
+
     observer.observe(document.body, { childList: true, subtree: true });
-// === СЕКРЕТНЫЙ СБРОС (Ctrl + Alt + Shift + O) ===
-document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'O') {
-        e.preventDefault();
-        if (confirm("⚠️ ВНИМАНИЕ: Обнулить все данные казино (баланс, покупки, история)?")) {
-            GM_setValue("operator_coins", 1000);
-            GM_setValue("operator_history", []);
-            GM_setValue("operator_has_vip", false);
-            GM_setValue("operator_has_binance", false);
-            alert("Прогресс сброшен. Перезагрузка...");
-            location.reload();
-        }
-    }
-});
+
 })();
