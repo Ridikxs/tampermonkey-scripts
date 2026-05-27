@@ -29,34 +29,13 @@
         appId: "1:392005607485:web:7f6b751f947986e96cca54"
     };
 
-if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
+function formatNum(num) {
+        return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
     }
-    const db = firebase.database();
-
-    const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
-
-    let balance = 0;
-    let historyLog = [];
-    let hasCalvinScript = false;
-    let hasBinance = false;
-    let isCloudInitialized = false;
-    let userRef = null;
-    
-    let processedEventIdsArr = GM_getValue("operator_processed_events", []);
-    const processedEventIds = new Set(processedEventIdsArr);
-
-    let isSpinning = false;
-    let freeSpins = 0;
 
     const BET_STEPS = [10, 50, 100, 250, 500, 1000, 2000];
     let betIndex = 1;
     let activeBet = BET_STEPS[betIndex];
-
-    const VIP_SCRIPT_COST = 1000000;       
-    const BINANCE_COST    = 100000000;     
-    const COINS_PER_MESSAGE = 0.1;
-    const COINS_PER_TAG = 0.5;
 
     function getDynamicStrip(isBonus, index) {
         const v = index / (BET_STEPS.length - 1);
@@ -96,6 +75,33 @@ if (!firebase.apps.length) {
         }
     }
 
+    // === ИНИЦИАЛИЗАЦИЯ FIREBASE ===
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
+
+    let balance = 0;
+    let historyLog = [];
+    let hasCalvinScript = false;
+    let hasBinance = false;
+    let isCloudInitialized = false;
+    let userRef = null;
+    
+    let processedEventIdsArr = GM_getValue("operator_processed_events", []);
+    const processedEventIds = new Set(processedEventIdsArr);
+
+    let isSpinning = false;
+    let freeSpins = 0;
+
+    const VIP_SCRIPT_COST = 1000000;       
+    const BINANCE_COST    = 100000000;     
+    const COINS_PER_MESSAGE = 0.1;
+    const COINS_PER_TAG = 0.5;
+
+    // === ИДЕНТИФИКАЦИЯ ТЕКУЩЕГО ОПЕРАТОРА ===
     function getMyOperatorNames() {
         const names = [];
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
@@ -159,6 +165,7 @@ if (!firebase.apps.length) {
         });
     }
 
+    // === СТИЛИ ===
     GM_addStyle(`
         .sparkmoth-casino-logo { cursor: pointer !important; transition: all 0.3s ease; position: relative; }
         .sparkmoth-casino-logo:hover { transform: scale(1.15); filter: drop-shadow(0 0 5px #b4befe); }
@@ -206,6 +213,7 @@ if (!firebase.apps.length) {
         @keyframes coinFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
     `);
 
+    // === ИНТЕРФЕЙС ===
     const modal = document.createElement('div');
     modal.id = 'slot-modal';
     modal.innerHTML = `
@@ -253,6 +261,7 @@ if (!firebase.apps.length) {
     const btnBetDown = document.getElementById('btn-bet-down');
     const btnBetMax = document.getElementById('btn-bet-max');
 
+    // === ДРАГ-Н-ДРОП ===
     const dragHandle = document.getElementById('modal-drag-handle');
     let isDragging = false, dragStartX, dragStartY;
     dragHandle.addEventListener('mousedown', (e) => {
@@ -272,6 +281,7 @@ if (!firebase.apps.length) {
     });
     document.addEventListener('mouseup', () => { isDragging = false; });
 
+    // === МОСТ ДЛЯ КОНСОЛИ ===
     unsafeWindow.addCazCoins = function(amount) {
         if (!tryInitializeCloud()) return;
         updateBalance(amount, "Пополнение Администратором");
@@ -361,6 +371,7 @@ if (!firebase.apps.length) {
         btnSpin.disabled = isSpinning;
     }
 
+    // === КРУТКА СЛОТОВ ===
     function performSpin() {
         if (!isCloudInitialized) {
             if (!tryInitializeCloud()) {
@@ -424,6 +435,7 @@ if (!firebase.apps.length) {
         if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; if (fsCounter) fsCounter.innerText = ""; updateUIState(); }
     }
 
+    // === СОБЫТИЯ ===
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
@@ -437,6 +449,16 @@ if (!firebase.apps.length) {
         if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
     };
 
+    function isMyMessage(msgElement) {
+        if (!msgElement.classList.contains('justify-end')) return false;
+        const msgImg = msgElement.querySelector('img');
+        const msgName = msgImg ? msgImg.alt.trim().toLowerCase() : '';
+        if (!msgName) return false;
+        const myNames = getMyOperatorNames();
+        return myNames.includes(msgName);
+    }
+
+    // === ПАРСИНГ РАБОЧИХ ДЕЙСТВИЙ ===
     function scanForActivities() {
         if (!tryInitializeCloud()) return;
         const myNames = getMyOperatorNames();
@@ -481,6 +503,7 @@ if (!firebase.apps.length) {
         }
     }
 
+    // === MUTATION OBSERVER ===
     let logoReplaced = false;
     const observer = new MutationObserver(((mutations, obs) => {
         tryInitializeCloud();
@@ -502,6 +525,9 @@ if (!firebase.apps.length) {
 
         scanForActivities();
     }));
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
     
     observer.observe(document.body, { childList: true, subtree: true });
 })();
