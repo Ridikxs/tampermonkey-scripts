@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.1
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -56,20 +56,37 @@
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
-    // === ИДЕНТИФИКАЦИЯ ОПЕРАТОРА ДЛЯ БАЗЫ ДАННЫХ ===
-    function getMyOperatorNames() {
-        const names = ['calvin', 'келвин']; 
+   function getMyOperatorNames() {
+        const names = [];
+
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
-        if (profileNameEl) names.push(profileNameEl.innerText.trim().toLowerCase());
+        if (profileNameEl && profileNameEl.innerText.trim()) {
+            names.push(profileNameEl.innerText.trim().toLowerCase());
+        }
+
         const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
-        if (profileImg) names.push(profileImg.alt.trim().toLowerCase());
+        if (profileImg && profileImg.alt.trim()) {
+            names.push(profileImg.alt.trim().toLowerCase());
+        }
+
+        if (names.length === 0) {
+            return [];
+        }
+
         return names;
     }
 
     function getDbSafeOperatorName() {
         const names = getMyOperatorNames();
-        const primaryName = names.length > 0 ? names[0] : 'unknown_operator';
-        return primaryName.replace(/[.#$\[\]]/g, '_');
+        
+        if (names.length > 0 && names[0]) {
+            return names[0].replace(/[.#$\[\]]/g, '_');
+        }
+        
+        if (!window.name) {
+            window.name = 'session_user_' + Math.floor(Math.random() * 10000);
+        }
+        return window.name;
     }
 
     const operatorDbId = getDbSafeOperatorName();
