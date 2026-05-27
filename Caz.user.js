@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.7
+// @version      3.8
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -319,7 +319,7 @@ function formatNum(num) {
         if (!panelShop) return;
         panelShop.innerHTML = `
             <div class="shop-item">
-                <span><b>Скрипт от Calvin</b> (Золотая рамка)</span>
+                <span><b>Скрипт от Calvin</b> (персональный)</span>
                 ${hasCalvinScript ? '<span style="color:#a6e3a1; font-weight:bold;">КУПЛЕНО ✔️</span>' : `<button class="buy-shop-btn" id="btn-buy-vip">Купить за ${formatNum(VIP_SCRIPT_COST)} 🪙</button>`}
             </div>
             <hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">
