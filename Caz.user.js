@@ -356,52 +356,131 @@ if (!firebase.apps.length) {
         setTimeout(() => rainContainer.remove(), 4000);
     }
 
-    function performSpin() {
-        if (!isCloudInitialized) return;
+function performSpin() {
+        if (!isCloudInitialized) {
+            if (!tryInitializeCloud()) {
+                msg.innerText = "Ожидание сети..."; 
+                msg.style.color = "#f9e2af";
+                return;
+            }
+        }
+
         const currentBet = BET_STEPS[betIndex];
-        if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
+
+        if (balance < currentBet && freeSpins === 0) {
+            msg.innerText = "Нет монет для ставки!"; 
+            msg.style.color = "#f38ba8"; 
+            return;
+        }
+
         isSpinning = true;
-        panelHist.style.display = 'none'; panelShop.style.display = 'none';
-        if (freeSpins === 0) { activeBet = currentBet; updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`); } 
-        else { freeSpins--; fsCounter.innerText = `Супер Спины: ${freeSpins}`; if (freeSpins === 0) fsCounter.innerText = "Последний спин!"; }
+        if (panelHist) panelHist.style.display = 'none'; 
+        if (panelShop) panelShop.style.display = 'none';
+
+        if (freeSpins === 0) {
+            activeBet = currentBet;
+            updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`);
+        } else {
+            freeSpins--;
+            if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`;
+            if (freeSpins === 0 && fsCounter) fsCounter.innerText = "Последний спин!";
+        }
+
         updateUIState();
-        msg.innerText = "Крутим..."; msg.style.color = "#cdd6f4";
+        msg.innerText = "Крутим..."; 
+        msg.style.color = "#cdd6f4";
+
         let ticks = 0;
         const isBonusActive = freeSpins > 0;
+
         const spinInterval = setInterval(() => {
-            document.getElementById('reel-1').innerText = getRandomSymbol(isBonusActive, betIndex).symbol;
-            document.getElementById('reel-2').innerText = getRandomSymbol(isBonusActive, betIndex).symbol;
-            document.getElementById('reel-3').innerText = getRandomSymbol(isBonusActive, betIndex).symbol;
+            const r1 = getRandomSymbol(isBonusActive, betIndex);
+            const r2 = getRandomSymbol(isBonusActive, betIndex);
+            const r3 = getRandomSymbol(isBonusActive, betIndex);
+
+            if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
+            if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
+            if (document.getElementById('reel-3')) document.getElementById('reel-3').innerText = r3.symbol;
+            
             ticks++;
-            if (ticks > 15) { clearInterval(spinInterval); finishSpin(); }
+            if (ticks > 15) { 
+                clearInterval(spinInterval); 
+                finishSpin(); 
+            }
         }, 80);
     }
 
     function finishSpin() {
         const isBonusActive = freeSpins > 0;
+
         let r1 = getRandomSymbol(isBonusActive, betIndex);
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
+
         const luck = Math.random();
-        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } } 
-        else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
-        document.getElementById('reel-1').innerText = r1.symbol;
-        document.getElementById('reel-2').innerText = r2.symbol;
-        document.getElementById('reel-3').innerText = r3.symbol;
+        if (isBonusActive) { 
+            if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } 
+        } else { 
+            if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } 
+        }
+
+        if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
+        if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
+        if (document.getElementById('reel-3')) document.getElementById('reel-3').innerText = r3.symbol;
+
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
-        let wonAmount = 0; let winType = "";
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; } 
-        else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
+        let wonAmount = 0; 
+        let winType = "";
+
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { 
+            wonAmount = Math.floor(activeBet * r1.mult); 
+            winType = `Выигрыш (x${r1.mult})`; 
+        } else if (r1.symbol === r2.symbol && r1.mult > 0) { 
+            const partialMult = Math.max(0.5, r1.mult * 0.3); 
+            wonAmount = Math.floor(activeBet * partialMult); 
+            winType = `Мини-Вин (x${partialMult.toFixed(1)})`; 
+        }
+
         if (wonAmount > 0) {
             updateBalance(wonAmount, winType);
-            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); } 
-            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; } 
-            else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
-        } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
-        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; fsCounter.innerText = `Супер Спины: ${freeSpins}`; } 
-        else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
-        if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; fsCounter.innerText = ""; updateUIState(); }
+            if (wonAmount >= activeBet * 10) { 
+                msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; 
+                msg.style.color = "#a6e3a1"; 
+                triggerCoinRain(); 
+            } else if (wonAmount >= activeBet * 3) { 
+                msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; 
+                msg.style.color = "#f9e2af"; 
+            } else { 
+                msg.innerText = `Победа: +${formatNum(wonAmount)}`; 
+                msg.style.color = "#a6adc8"; 
+            }
+        } else { 
+            msg.innerText = "Нет совпадений"; 
+            msg.style.color = "#6c7086"; 
+            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); 
+        }
+
+        if (scatterCount === 3) { 
+            msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; 
+            msg.style.color = "#cba6f7"; 
+            logHistory(0, "Бонуска (3 Скаттера)"); 
+            freeSpins += 10; 
+            if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; 
+        } else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { 
+            msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; 
+            msg.style.color = "#89b4fa"; 
+            logHistory(0, "Респин (Скаттер)"); 
+            freeSpins += 1; 
+        }
+
+        if (freeSpins > 0) { 
+            setTimeout(performSpin, 1200); 
+        } else { 
+            isSpinning = false; 
+            if (fsCounter) fsCounter.innerText = ""; 
+            updateUIState(); 
+        }
     }
 
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
