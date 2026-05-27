@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.2
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -29,17 +29,19 @@
         appId: "1:392005607485:web:7f6b751f947986e96cca54"
     };
 
-    if (!firebase.apps.length) {
+if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.database();
 
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
-    let balance = 500;
+    let balance = 0;
     let historyLog = [];
     let hasCalvinScript = false;
     let hasBinance = false;
+    let isCloudInitialized = false;
+    let userRef = null;
     
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
@@ -56,67 +58,62 @@
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
-   function getMyOperatorNames() {
+    function getMyOperatorNames() {
         const names = [];
-
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
         if (profileNameEl && profileNameEl.innerText.trim()) {
             names.push(profileNameEl.innerText.trim().toLowerCase());
         }
-
         const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
         if (profileImg && profileImg.alt.trim()) {
             names.push(profileImg.alt.trim().toLowerCase());
         }
-
-        if (names.length === 0) {
-            return [];
-        }
-
         return names;
     }
 
-    function getDbSafeOperatorName() {
+    function tryInitializeCloud() {
+        if (isCloudInitialized) return true;
+
         const names = getMyOperatorNames();
-        
-        if (names.length > 0 && names[0]) {
-            return names[0].replace(/[.#$\[\]]/g, '_');
+        if (names.length === 0 || !names[0]) {
+            return false;
         }
-        
-        if (!window.name) {
-            window.name = 'session_user_' + Math.floor(Math.random() * 10000);
-        }
-        return window.name;
+
+        const operatorDbId = names[0].replace(/[.#$\[\]]/g, '_');
+        userRef = db.ref(`operators/${operatorDbId}`);
+
+        userRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                balance = data.balance !== undefined ? data.balance : 0;
+                historyLog = data.history || [];
+                hasCalvinScript = data.hasVip || false;
+                hasBinance = data.hasBinance || false;
+                
+                if (document.getElementById('modal-balance')) {
+                    document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
+                    document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
+                }
+                updateUIState();
+                renderHistory();
+                renderShop();
+            }
+        });
+
+        userRef.once('value').then((snapshot) => {
+            if (!snapshot.exists()) {
+                balance = 1000;
+                pushToCloud();
+            }
+        });
+
+        isCloudInitialized = true;
+        console.log(`%c HUD: Успешное подключение облака для оператора: ${operatorDbId} `, 'background: #1e1e2e; color: #a6e3a1; font-weight: bold;');
+        return true;
     }
 
-    const operatorDbId = getDbSafeOperatorName();
-    const userRef = db.ref(`operators/${operatorDbId}`);
-
-    userRef.on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            balance = data.balance !== undefined ? data.balance : 0;
-            historyLog = data.history || [];
-            hasCalvinScript = data.hasVip || false;
-            hasBinance = data.hasBinance || false;
-            
-            if (document.getElementById('modal-balance')) {
-                document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
-                document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
-            }
-            updateUIState();
-            renderHistory();
-            renderShop();
-        }
-    });
-
-    userRef.once('value').then((snapshot) => {
-        if (!snapshot.exists()) {
-            pushToCloud();
-        }
-    });
-
     function pushToCloud() {
+        if (!isCloudInitialized || !userRef) return;
         userRef.set({
             balance: balance,
             history: historyLog,
@@ -126,96 +123,48 @@
         });
     }
 
-    function getDynamicStrip(isBonus, index) {
-        const v = index / (BET_STEPS.length - 1);
-        const multWild = 50 + Math.floor(v * 100);
-        const multMulti = 15 + Math.floor(v * 15);
-        const multCoin = 5 + Math.floor(v * 5);
-        const multTicket = 1.5 + Math.floor(v * 1);
-
-        if (isBonus) {
-            return [
-                { symbol: '👑', mult: multWild, weight: 10 },
-                { symbol: '🚀', mult: multMulti, weight: 20 },
-                { symbol: '🎰', mult: multCoin, weight: 30 },
-                { symbol: '✉️', mult: multTicket, weight: 25 },
-                { symbol: '🔮', mult: 0, weight: 5 },
-                { symbol: '❌', mult: 0, weight: 10 }
-            ];
-        } else {
-            return [
-                { symbol: '👑', mult: multWild, weight: 3 },
-                { symbol: '🚀', mult: multMulti, weight: 10 },
-                { symbol: '🎰', mult: multCoin, weight: 25 },
-                { symbol: '✉️', mult: multTicket, weight: 35 },
-                { symbol: '🔮', mult: 0, weight: 7 },
-                { symbol: '❌', mult: 0, weight: 20 }
-            ];
-        }
-    }
-
     GM_addStyle(`
         .sparkmoth-casino-logo { cursor: pointer !important; transition: all 0.3s ease; position: relative; }
         .sparkmoth-casino-logo:hover { transform: scale(1.15); filter: drop-shadow(0 0 5px #b4befe); }
         .sparkmoth-casino-logo::after { content: ''; position: absolute; width: 100%; height: 100%; top: 0; left: 0; border-radius: 50%; border: 2px solid #a6e3a1; opacity: 0; animation: logoPulse 2s infinite; pointer-events: none; }
         @keyframes logoPulse { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }
-
-        #slot-modal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #181825; padding: 20px; border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 99999; display: none;
-            flex-direction: column; align-items: center;
-            border: 2px solid ${hasCalvinScript ? '#f9e2af' : '#b4befe'};
-            color: white; font-family: sans-serif; min-width: 380px; min-height: 420px;
-            resize: both; overflow: auto;
-        }
-
+        #slot-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #181825; padding: 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 99999; display: none; flex-direction: column; align-items: center; border: 2px solid #b4befe; color: white; font-family: sans-serif; min-width: 380px; min-height: 420px; resize: both; overflow: auto; }
         .modal-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #313244; padding-bottom: 10px; cursor: grab; user-select: none; }
         .modal-header:active { cursor: grabbing; }
-
         #modal-balance { font-weight: bold; color: #f9e2af; font-size: 18px; pointer-events: none; margin-right: auto;}
         .header-controls { display: flex; gap: 8px; margin-left: 15px;}
-
         .tab-btn { background: #45475a; color: #cdd6f4; border: none; border-radius: 4px; padding: 5px 8px; cursor: pointer; font-size: 14px; }
         .tab-btn:hover { background: #585b70; }
         .close-btn { background: transparent; border: none; color: #f38ba8; font-size: 20px; cursor: pointer; padding: 0; line-height: 1;}
-
         .reels-container { display: flex; gap: 15px; margin: 10px 0; justify-content: center; width: 100%;}
         .reel { width: 80px; height: 80px; background: #11111b; border: 2px solid #45475a; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 40px; overflow: hidden; flex-shrink: 0; }
-
         .bet-controls { display: flex; justify-content: center; align-items: center; gap: 15px; width: 100%; margin-bottom: 15px; background: #1e1e2e; padding: 10px; border-radius: 8px; border: 1px solid #313244;}
         .bet-btn { background: #89b4fa; border: none; color: #111; padding: 5px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;}
         .bet-btn:disabled { background: #45475a; color: #7f849c; cursor: not-allowed; }
         .bet-display-box { display: flex; flex-direction: column; align-items: center; min-width: 100px; }
         #bet-display { font-weight: bold; font-size: 18px; color: #cdd6f4;}
-
         .slot-controls { display: flex; gap: 10px; width: 100%; justify-content: center; margin-top: auto;}
         .spin-btn { background: #a6e3a1; color: #111; padding: 10px 20px; font-size: 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; flex-grow: 1;}
         .spin-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
         .bonus-btn { background: #cba6f7; color: #111; padding: 10px 15px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
         .bonus-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
-
         #slot-message { margin: 5px 0 10px; font-size: 16px; font-weight: bold; color: #cdd6f4; height: 20px; text-align: center;}
         #fs-counter { color: #f38ba8; font-weight: bold; font-size: 14px; height: 16px;}
-
         #volatility-container { margin-top: 15px; text-align: center; font-size: 22px; letter-spacing: 4px; display: flex; justify-content: center; align-items: center; width: 100%; padding-top: 12px; border-top: 1px dashed #313244; }
         .bolt-active { color: #f9e2af; text-shadow: 0 0 12px #f2cd32; transition: all 0.3s; }
         .bolt-inactive { filter: grayscale(100%); opacity: 0.15; transition: all 0.3s; }
         .bolt-max { font-size: 14px; font-weight: bold; color: #f38ba8; text-shadow: 0 0 8px #f38ba8; margin-left: 10px; font-style: italic; letter-spacing: 1px;}
-
         .side-panel { display: none; width: 100%; background: #11111b; border-radius: 8px; padding: 10px; margin-top: 10px; border: 1px solid #313244; max-height: 200px; overflow-y: auto; }
         .hist-item { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; border-bottom: 1px dashed #313244; padding-bottom: 2px;}
         .hist-time { color: #a6adc8; }
         .hist-type { color: #cdd6f4; }
         .hist-pos { color: #a6e3a1; font-weight: bold;}
         .hist-neg { color: #f38ba8; font-weight: bold;}
-
         .shop-item { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 5px 0; }
         .buy-shop-btn { background: #f9e2af; color: #111; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .buy-shop-btn:hover { background: #f2cd32; }
         .buy-shop-btn.binance { background: #a6e3a1; }
         .buy-shop-btn.binance:hover { background: #94e289; }
-
         #coin-rain-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 100000; overflow: hidden; }
         .falling-coin { position: absolute; top: -50px; font-size: 35px; user-select: none; animation: coinFall linear forwards; }
         @keyframes coinFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
@@ -229,39 +178,32 @@
     modal.id = 'slot-modal';
     modal.innerHTML = `
         <div class="modal-header" id="modal-drag-handle">
-            <span id="modal-balance" title="Загрузка облака...">🪙 Загрузка...</span>
+            <span id="modal-balance" title="Ожидание авторизации...">🪙 Ожидание...</span>
             <div class="header-controls">
                 <button class="tab-btn" id="btn-hist" title="История">📜</button>
                 <button class="tab-btn" id="btn-shop" title="Магазин">🛒</button>
                 <button class="close-btn" id="btn-close-slots">✖</button>
             </div>
         </div>
-
         <div class="side-panel" id="panel-history"></div>
         <div class="side-panel" id="panel-shop"></div>
-
         <div id="fs-counter"></div>
         <div class="reels-container" id="reels-view">
             <div class="reel" id="reel-1">❌</div>
             <div class="reel" id="reel-2">❌</div>
             <div class="reel" id="reel-3">❌</div>
         </div>
-
         <div class="bet-controls">
             <button class="bet-btn" id="btn-bet-down">➖</button>
-            <div class="bet-display-box">
-                <span id="bet-display">Ставка: 50</span>
-            </div>
+            <div class="bet-display-box"><span id="bet-display">Ставка: 50</span></div>
             <button class="bet-btn" id="btn-bet-up">➕</button>
             <button class="bet-btn" id="btn-bet-max">MAX</button>
         </div>
-
         <div id="slot-message">Выбери ставку!</div>
         <div class="slot-controls">
             <button class="bonus-btn" id="btn-buy-bonus">Бонус (${formatNum(5000)})</button>
             <button class="spin-btn" id="btn-spin">Spin</button>
         </div>
-
         <div id="volatility-container"></div>
     `;
     document.body.appendChild(modal);
@@ -281,7 +223,6 @@
 
     const dragHandle = document.getElementById('modal-drag-handle');
     let isDragging = false, dragStartX, dragStartY;
-
     dragHandle.addEventListener('mousedown', (e) => {
         if (e.target.tagName === 'BUTTON') return;
         isDragging = true;
@@ -292,7 +233,6 @@
         dragStartX = e.clientX - rect.left;
         dragStartY = e.clientY - rect.top;
     });
-
     document.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         modal.style.left = (e.clientX - dragStartX) + 'px';
@@ -301,15 +241,25 @@
     document.addEventListener('mouseup', () => { isDragging = false; });
 
     unsafeWindow.addCazCoins = function(amount) {
+        if (!tryInitializeCloud()) { console.error("HUD: База данных еще не инициализирована!"); return; }
         updateBalance(amount, "Пополнение Администратором");
         console.log(`%c 💰 Успешно начислено ${amount} монет! `, 'background: #181825; color: #a6e3a1; font-weight: bold; font-size: 14px; padding: 4px;');
     };
+
+    function updateBalance(amount, logType = null) {
+        balance = Math.round((balance + amount) * 10) / 10;
+        if (uiBalance) {
+            uiBalance.innerText = `🪙 ${formatNum(balance)}`;
+            uiBalance.title = `Точный баланс: ${balance}`;
+        }
+        updateUIState();
+        if (logType) { logHistory(amount, logType); } else { pushToCloud(); }
+    }
 
     function logHistory(amount, type) {
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
         if (historyLog.length > 40) historyLog.pop();
-        // Запись в Firebase
         pushToCloud();
     }
 
@@ -328,7 +278,7 @@
         if (!panelShop) return;
         panelShop.innerHTML = `
             <div class="shop-item">
-                <span><b>Скрипт от Calvin</b> (по возможности на заказ)</span>
+                <span><b>Скрипт от Calvin</b> (Золотая рамка)</span>
                 ${hasCalvinScript ? '<span style="color:#a6e3a1; font-weight:bold;">КУПЛЕНО ✔️</span>' : `<button class="buy-shop-btn" id="btn-buy-vip">Купить за ${formatNum(VIP_SCRIPT_COST)} 🪙</button>`}
             </div>
             <hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">
@@ -337,7 +287,6 @@
                 ${hasBinance ? '<span style="color:#a6e3a1; font-weight:bold;">ВЫВЕДЕНО ✔️</span>' : `<button class="buy-shop-btn binance" id="btn-buy-binance">Купить за ${formatNum(BINANCE_COST)} 🪙</button>`}
             </div>
         `;
-
         const btnBuyVip = document.getElementById('btn-buy-vip');
         if (btnBuyVip) {
             btnBuyVip.onclick = () => {
@@ -349,7 +298,6 @@
                 } else { alert(`Нужно ${formatNum(VIP_SCRIPT_COST)} 🪙`); }
             };
         }
-
         const btnBuyBinance = document.getElementById('btn-buy-binance');
         if (btnBuyBinance) {
             btnBuyBinance.onclick = () => {
@@ -363,44 +311,21 @@
         }
     }
 
-    function updateBalance(amount, logType = null) {
-        balance = Math.round((balance + amount) * 10) / 10;
-        
-        if (uiBalance) {
-            uiBalance.innerText = `🪙 ${formatNum(balance)}`;
-            uiBalance.title = `Точный баланс: ${balance}`;
-        }
-        
-        updateUIState();
-        
-        if (logType) {
-            logHistory(amount, logType);
-        } else {
-            pushToCloud();
-        }
-    }
-
     function updateUIState() {
         if (!betDisplay) return;
-        
         const currentBet = BET_STEPS[betIndex];
         betDisplay.innerText = `Ставка: ${formatNum(currentBet)}`;
-
         const boltLevels = [1, 2, 3, 3, 4, 4, 5];
         const activeBolts = boltLevels[betIndex];
-
         let boltsHtml = '';
         for(let i = 1; i <= 5; i++) boltsHtml += i <= activeBolts ? '<span class="bolt-active">⚡</span>' : '<span class="bolt-inactive">⚡</span>';
         if(betIndex === BET_STEPS.length - 1) boltsHtml += '<span class="bolt-max">MAX</span>';
         volContainer.innerHTML = boltsHtml;
-
         btnBonus.innerText = `Купить Бонус (${formatNum(currentBet * 100)})`;
-
         const locked = isSpinning || freeSpins > 0;
         btnBetDown.disabled = locked || betIndex === 0;
         btnBetUp.disabled = locked || betIndex === BET_STEPS.length - 1;
         btnBetMax.disabled = locked || betIndex === BET_STEPS.length - 1;
-
         btnBonus.disabled = locked || balance < (currentBet * 100);
         btnSpin.disabled = isSpinning;
     }
@@ -432,30 +357,17 @@
     }
 
     function performSpin() {
+        if (!isCloudInitialized) return;
         const currentBet = BET_STEPS[betIndex];
-
-        if (balance < currentBet && freeSpins === 0) {
-            msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return;
-        }
-
+        if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
         isSpinning = true;
         panelHist.style.display = 'none'; panelShop.style.display = 'none';
-
-        if (freeSpins === 0) {
-            activeBet = currentBet;
-            updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`);
-        } else {
-            freeSpins--;
-            fsCounter.innerText = `Супер Спины: ${freeSpins}`;
-            if (freeSpins === 0) fsCounter.innerText = "Последний спин!";
-        }
-
+        if (freeSpins === 0) { activeBet = currentBet; updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`); } 
+        else { freeSpins--; fsCounter.innerText = `Супер Спины: ${freeSpins}`; if (freeSpins === 0) fsCounter.innerText = "Последний спин!"; }
         updateUIState();
         msg.innerText = "Крутим..."; msg.style.color = "#cdd6f4";
-
         let ticks = 0;
         const isBonusActive = freeSpins > 0;
-
         const spinInterval = setInterval(() => {
             document.getElementById('reel-1').innerText = getRandomSymbol(isBonusActive, betIndex).symbol;
             document.getElementById('reel-2').innerText = getRandomSymbol(isBonusActive, betIndex).symbol;
@@ -467,140 +379,62 @@
 
     function finishSpin() {
         const isBonusActive = freeSpins > 0;
-
         let r1 = getRandomSymbol(isBonusActive, betIndex);
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
-
         const luck = Math.random();
-        if (isBonusActive) {
-            if (luck < 0.25) { r2 = r1; r3 = r1; }
-            else if (luck < 0.55) { r2 = r1; }
-        } else {
-            if (luck < 0.10) { r2 = r1; r3 = r1; }
-            else if (luck < 0.30) { r2 = r1; }
-        }
-
+        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } } 
+        else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
         document.getElementById('reel-1').innerText = r1.symbol;
         document.getElementById('reel-2').innerText = r2.symbol;
         document.getElementById('reel-3').innerText = r3.symbol;
-
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
-
-        let wonAmount = 0;
-        let winType = "";
-
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) {
-            wonAmount = Math.floor(activeBet * r1.mult);
-            winType = `Выигрыш (x${r1.mult})`;
-        } else if (r1.symbol === r2.symbol && r1.mult > 0) {
-            const partialMult = Math.max(0.5, r1.mult * 0.3);
-            wonAmount = Math.floor(activeBet * partialMult);
-            winType = `Мини-Вин (x${partialMult.toFixed(1)})`;
-        }
-
+        let wonAmount = 0; let winType = "";
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; } 
+        else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
         if (wonAmount > 0) {
             updateBalance(wonAmount, winType);
-            if (wonAmount >= activeBet * 10) {
-                msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`;
-                msg.style.color = "#a6e3a1";
-                triggerCoinRain();
-            } else if (wonAmount >= activeBet * 3) {
-                msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`;
-                msg.style.color = "#f9e2af";
-            } else {
-                msg.innerText = `Победа: +${formatNum(wonAmount)}`;
-                msg.style.color = "#a6adc8";
-            }
-        } else {
-            msg.innerText = "Нет совпадений";
-            msg.style.color = "#6c7086";
-            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`);
-        }
-
-        if (scatterCount === 3) {
-            msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!";
-            msg.style.color = "#cba6f7";
-            logHistory(0, "Бонуска (3 Скаттера)");
-            freeSpins += 10;
-            fsCounter.innerText = `Супер Спины: ${freeSpins}`;
-        } else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) {
-            msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`;
-            msg.style.color = "#89b4fa";
-            logHistory(0, "Респин (Скаттер)");
-            freeSpins += 1;
-        }
-
-        if (freeSpins > 0) {
-            setTimeout(performSpin, 1200);
-        } else {
-            isSpinning = false;
-            fsCounter.innerText = "";
-            updateUIState();
-        }
+            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); } 
+            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; } 
+            else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
+        } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
+        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; fsCounter.innerText = `Супер Спины: ${freeSpins}`; } 
+        else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
+        if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; fsCounter.innerText = ""; updateUIState(); }
     }
 
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
-
     document.getElementById('btn-hist').onclick = () => { panelShop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; };
     document.getElementById('btn-shop').onclick = () => { panelHist.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; };
-
     document.getElementById('btn-close-slots').onclick = () => { modal.style.display = 'none'; };
     document.getElementById('btn-spin').onclick = performSpin;
-
     document.getElementById('btn-buy-bonus').onclick = () => {
+        if (!isCloudInitialized) return;
         const cost = BET_STEPS[betIndex] * 100;
-        if (balance >= cost && !isSpinning) {
-            activeBet = BET_STEPS[betIndex];
-            updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`);
-            freeSpins = 10;
-            fsCounter.innerText = `Супер Спины: ${freeSpins}`;
-            msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7";
-            isSpinning = true; updateUIState();
-            setTimeout(performSpin, 1000);
-        }
+        if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
     };
 
-
-    function isMyMessage(msgElement) {
-        if (!msgElement.classList.contains('justify-end')) return false;
-
-        const msgImg = msgElement.querySelector('img');
-        const msgName = msgImg ? msgImg.alt.trim().toLowerCase() : '';
-        if (!msgName) return false;
-
-        const myNames = getMyOperatorNames();
-        return myNames.includes(msgName);
-    }
-
     function scanForActivities() {
-        let hasNew = false;
+        if (!tryInitializeCloud()) return;
         const myNames = getMyOperatorNames();
-        
         const messages = document.querySelectorAll('.message-bubble-container');
+        let hasNew = false;
+
         messages.forEach(msgElement => {
             const msgId = msgElement.getAttribute('data-message-id');
             const updatedAtStr = msgElement.getAttribute('updatedat');
-            
             if (!msgId || !/^\d+$/.test(msgId) || !updatedAtStr) return;
             if (processedEventIds.has(msgId)) return;
             
             const msgTime = new Date(updatedAtStr).getTime();
-            if (Date.now() - msgTime > 300000) {
-                processedEventIds.add(msgId);
-                hasNew = true;
-                return;
-            }
+            if (Date.now() - msgTime > 300000) { processedEventIds.add(msgId); hasNew = true; return; }
 
             if (msgElement.classList.contains('justify-end')) {
-                if (isMyMessage(msgElement)) {
-                    updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)");
-                }
-                processedEventIds.add(msgId);
-                hasNew = true;
+                if (isMyMessage(msgElement)) { updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)"); }
+                processedEventIds.add(msgId); hasNew = true;
             } 
             else if (msgElement.classList.contains('justify-center')) {
                 const sysNotif = msgElement.querySelector('span[title*="добавил"], span[title*="удалил"]');
@@ -608,32 +442,16 @@
                     const titleText = sysNotif.getAttribute('title').toLowerCase();
                     const isAdded = titleText.includes('добавил');
                     const isRemoved = titleText.includes('удалил');
-                    
                     let mySaleTagFound = false;
-                    for (let name of myNames) {
-                        if (titleText.includes(`${name}-продажа`)) {
-                            mySaleTagFound = true;
-                            break;
-                        }
-                    }
+                    for (let name of myNames) { if (titleText.includes(`${name}-продажа`)) { mySaleTagFound = true; break; } }
                     
                     if (mySaleTagFound) {
-                        if (isAdded) {
-                            const actionAuthor = titleText.split(' ')[0];
-                            if (myNames.includes(actionAuthor)) {
-                                updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)");
-                            }
-                        } else if (isRemoved) {
-                            updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)");
-                        }
+                        if (isAdded) { const actionAuthor = titleText.split(' ')[0]; if (myNames.includes(actionAuthor)) { updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); } } 
+                        else if (isRemoved) { updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)"); }
                     }
                 }
-                processedEventIds.add(msgId);
-                hasNew = true;
-            } else {
-                processedEventIds.add(msgId);
-                hasNew = true;
-            }
+                processedEventIds.add(msgId); hasNew = true;
+            } else { processedEventIds.add(msgId); hasNew = true; }
         });
 
         if (hasNew) {
@@ -645,6 +463,8 @@
 
     let logoReplaced = false;
     const observer = new MutationObserver(((mutations, obs) => {
+        tryInitializeCloud();
+
         const img = document.querySelector(LOGO_IMG_SELECTOR);
         if (img) {
             const container = img.closest('div.grid');
@@ -652,21 +472,16 @@
                 container.classList.add('sparkmoth-casino-logo');
                 container.addEventListener('click', function(e) {
                     e.preventDefault(); e.stopPropagation();
+                    if (!tryInitializeCloud()) { alert("Скрипт ожидает прогрузки профиля Sparkmoth..."); return; }
                     modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-                    if(modal.style.display === 'flex' && !modal.style.left) {
-                        modal.style.transform = 'translate(-50%, -50%)';
-                        modal.style.left = '50%'; modal.style.top = '50%';
-                    }
+                    if(modal.style.display === 'flex' && !modal.style.left) { modal.style.transform = 'translate(-50%, -50%)'; modal.style.left = '50%'; modal.style.top = '50%'; }
                 });
                 logoReplaced = true;
             }
-        } else {
-            logoReplaced = false;
-        }
+        } else { logoReplaced = false; }
 
         scanForActivities();
     }));
     
     observer.observe(document.body, { childList: true, subtree: true });
-
 })();
