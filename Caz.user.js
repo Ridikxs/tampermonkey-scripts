@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.3
+// @version      3.4
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -58,6 +58,44 @@ if (!firebase.apps.length) {
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
+    function getDynamicStrip(isBonus, index) {
+        const v = index / (BET_STEPS.length - 1);
+        const multWild = 50 + Math.floor(v * 100);
+        const multMulti = 15 + Math.floor(v * 15);
+        const multCoin = 5 + Math.floor(v * 5);
+        const multTicket = 1.5 + Math.floor(v * 1);
+
+        if (isBonus) {
+            return [
+                { symbol: '👑', mult: multWild, weight: 10 },
+                { symbol: '🚀', mult: multMulti, weight: 20 },
+                { symbol: '🎰', mult: multCoin, weight: 30 },
+                { symbol: '✉️', mult: multTicket, weight: 25 },
+                { symbol: '🔮', mult: 0, weight: 5 },
+                { symbol: '❌', mult: 0, weight: 10 }
+            ];
+        } else {
+            return [
+                { symbol: '👑', mult: multWild, weight: 3 },
+                { symbol: '🚀', mult: multMulti, weight: 10 },
+                { symbol: '🎰', mult: multCoin, weight: 25 },
+                { symbol: '✉️', mult: multTicket, weight: 35 },
+                { symbol: '🔮', mult: 0, weight: 7 },
+                { symbol: '❌', mult: 0, weight: 20 }
+            ];
+        }
+    }
+
+    function getRandomSymbol(isBonus, index) {
+        const strip = getDynamicStrip(isBonus, index);
+        let sum = strip.reduce((acc, el) => acc + el.weight, 0);
+        let rand = Math.random() * sum;
+        for (let item of strip) {
+            if (rand < item.weight) return item;
+            rand -= item.weight;
+        }
+    }
+
     function getMyOperatorNames() {
         const names = [];
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
@@ -75,9 +113,7 @@ if (!firebase.apps.length) {
         if (isCloudInitialized) return true;
 
         const names = getMyOperatorNames();
-        if (names.length === 0 || !names[0]) {
-            return false;
-        }
+        if (names.length === 0 || !names[0]) return false;
 
         const operatorDbId = names[0].replace(/[.#$\[\]]/g, '_');
         userRef = db.ref(`operators/${operatorDbId}`);
@@ -108,7 +144,7 @@ if (!firebase.apps.length) {
         });
 
         isCloudInitialized = true;
-        console.log(`%c HUD: Успешное подключение облака для оператора: ${operatorDbId} `, 'background: #1e1e2e; color: #a6e3a1; font-weight: bold;');
+        console.log(`%c HUD: Подключено облако для оператора: ${operatorDbId} `, 'background: #1e1e2e; color: #a6e3a1; font-weight: bold;');
         return true;
     }
 
@@ -169,10 +205,6 @@ if (!firebase.apps.length) {
         .falling-coin { position: absolute; top: -50px; font-size: 35px; user-select: none; animation: coinFall linear forwards; }
         @keyframes coinFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
     `);
-
-    function formatNum(num) {
-        return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
-    }
 
     const modal = document.createElement('div');
     modal.id = 'slot-modal';
@@ -241,9 +273,8 @@ if (!firebase.apps.length) {
     document.addEventListener('mouseup', () => { isDragging = false; });
 
     unsafeWindow.addCazCoins = function(amount) {
-        if (!tryInitializeCloud()) { console.error("HUD: База данных еще не инициализирована!"); return; }
+        if (!tryInitializeCloud()) return;
         updateBalance(amount, "Пополнение Администратором");
-        console.log(`%c 💰 Успешно начислено ${amount} монет! `, 'background: #181825; color: #a6e3a1; font-weight: bold; font-size: 14px; padding: 4px;');
     };
 
     function updateBalance(amount, logType = null) {
@@ -330,66 +361,23 @@ if (!firebase.apps.length) {
         btnSpin.disabled = isSpinning;
     }
 
-    function getRandomSymbol(isBonus, index) {
-        const strip = getDynamicStrip(isBonus, index);
-        let sum = strip.reduce((acc, el) => acc + el.weight, 0);
-        let rand = Math.random() * sum;
-        for (let item of strip) {
-            if (rand < item.weight) return item;
-            rand -= item.weight;
-        }
-    }
-
-    function triggerCoinRain() {
-        const rainContainer = document.createElement('div');
-        rainContainer.id = 'coin-rain-container';
-        document.body.appendChild(rainContainer);
-        for (let i = 0; i < 150; i++) {
-            const coin = document.createElement('div');
-            coin.innerText = Math.random() > 0.5 ? '🪙' : '💵';
-            coin.className = 'falling-coin';
-            coin.style.left = Math.random() * 100 + 'vw';
-            coin.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
-            coin.style.animationDelay = (Math.random() * 1.5) + 's';
-            rainContainer.appendChild(coin);
-        }
-        setTimeout(() => rainContainer.remove(), 4000);
-    }
-
-function performSpin() {
+    function performSpin() {
         if (!isCloudInitialized) {
             if (!tryInitializeCloud()) {
-                msg.innerText = "Ожидание сети..."; 
-                msg.style.color = "#f9e2af";
-                return;
+                msg.innerText = "Ожидание сети..."; return;
             }
         }
-
         const currentBet = BET_STEPS[betIndex];
-
-        if (balance < currentBet && freeSpins === 0) {
-            msg.innerText = "Нет монет для ставки!"; 
-            msg.style.color = "#f38ba8"; 
-            return;
-        }
-
+        if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
         isSpinning = true;
         if (panelHist) panelHist.style.display = 'none'; 
         if (panelShop) panelShop.style.display = 'none';
-
-        if (freeSpins === 0) {
-            activeBet = currentBet;
-            updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`);
-        } else {
-            freeSpins--;
-            if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`;
-            if (freeSpins === 0 && fsCounter) fsCounter.innerText = "Последний спин!";
-        }
-
+        
+        if (freeSpins === 0) { activeBet = currentBet; updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`); } 
+        else { freeSpins--; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; if (freeSpins === 0 && fsCounter) fsCounter.innerText = "Последний спин!"; }
+        
         updateUIState();
-        msg.innerText = "Крутим..."; 
-        msg.style.color = "#cdd6f4";
-
+        msg.innerText = "Крутим..."; msg.style.color = "#cdd6f4";
         let ticks = 0;
         const isBonusActive = freeSpins > 0;
 
@@ -401,86 +389,39 @@ function performSpin() {
             if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
             if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
             if (document.getElementById('reel-3')) document.getElementById('reel-3').innerText = r3.symbol;
-            
             ticks++;
-            if (ticks > 15) { 
-                clearInterval(spinInterval); 
-                finishSpin(); 
-            }
+            if (ticks > 15) { clearInterval(spinInterval); finishSpin(); }
         }, 80);
     }
 
     function finishSpin() {
         const isBonusActive = freeSpins > 0;
-
         let r1 = getRandomSymbol(isBonusActive, betIndex);
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
-
         const luck = Math.random();
-        if (isBonusActive) { 
-            if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } 
-        } else { 
-            if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } 
-        }
-
+        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } } 
+        else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
+        
         if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
         if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
         if (document.getElementById('reel-3')) document.getElementById('reel-3').innerText = r3.symbol;
-
+        
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
-        let wonAmount = 0; 
-        let winType = "";
-
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { 
-            wonAmount = Math.floor(activeBet * r1.mult); 
-            winType = `Выигрыш (x${r1.mult})`; 
-        } else if (r1.symbol === r2.symbol && r1.mult > 0) { 
-            const partialMult = Math.max(0.5, r1.mult * 0.3); 
-            wonAmount = Math.floor(activeBet * partialMult); 
-            winType = `Мини-Вин (x${partialMult.toFixed(1)})`; 
-        }
-
+        let wonAmount = 0; let winType = "";
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; } 
+        else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
+        
         if (wonAmount > 0) {
             updateBalance(wonAmount, winType);
-            if (wonAmount >= activeBet * 10) { 
-                msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; 
-                msg.style.color = "#a6e3a1"; 
-                triggerCoinRain(); 
-            } else if (wonAmount >= activeBet * 3) { 
-                msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; 
-                msg.style.color = "#f9e2af"; 
-            } else { 
-                msg.innerText = `Победа: +${formatNum(wonAmount)}`; 
-                msg.style.color = "#a6adc8"; 
-            }
-        } else { 
-            msg.innerText = "Нет совпадений"; 
-            msg.style.color = "#6c7086"; 
-            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); 
-        }
-
-        if (scatterCount === 3) { 
-            msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; 
-            msg.style.color = "#cba6f7"; 
-            logHistory(0, "Бонуска (3 Скаттера)"); 
-            freeSpins += 10; 
-            if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; 
-        } else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { 
-            msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; 
-            msg.style.color = "#89b4fa"; 
-            logHistory(0, "Респин (Скаттер)"); 
-            freeSpins += 1; 
-        }
-
-        if (freeSpins > 0) { 
-            setTimeout(performSpin, 1200); 
-        } else { 
-            isSpinning = false; 
-            if (fsCounter) fsCounter.innerText = ""; 
-            updateUIState(); 
-        }
+            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); } 
+            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; } 
+            else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
+        } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
+        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; } 
+        else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
+        if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; if (fsCounter) fsCounter.innerText = ""; updateUIState(); }
     }
 
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
@@ -493,7 +434,7 @@ function performSpin() {
     document.getElementById('btn-buy-bonus').onclick = () => {
         if (!isCloudInitialized) return;
         const cost = BET_STEPS[betIndex] * 100;
-        if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
+        if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
     };
 
     function scanForActivities() {
