@@ -1,13 +1,16 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      2.1
-// @description  Отдыхай когда нет чатов
+// @version      3.0
+// @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
+// @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js
+// @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        unsafeWindow
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Caz.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Caz.user.js
 // @run-at       document-end
@@ -16,13 +19,28 @@
 (function() {
     'use strict';
 
+    const firebaseConfig = {
+        apiKey: "AIzaSyBWk-zku_Hij3KZjh_0ACQCu0z0Fj3ICZA",
+        authDomain: "https://sparkmothv1.firebaseapp.com",
+        databaseURL: "https://sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "sparkmothv1",
+        storageBucket: "https://sparkmothv1.firebasestorage.app",
+        messagingSenderId: "392005607485",
+        appId: "1:392005607485:web:7f6b751f947986e96cca54"
+    };
+
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
-    let balance = Math.round((GM_getValue("operator_coins", 100)) * 10) / 10;
-    let historyLog = GM_getValue("operator_history", []);
-    let hasCalvinScript = GM_getValue("operator_has_vip", false);
-    let hasBinance = GM_getValue("operator_has_binance", false);
-
+    let balance = 500;
+    let historyLog = [];
+    let hasCalvinScript = false;
+    let hasBinance = false;
+    
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
 
@@ -33,10 +51,63 @@
     let betIndex = 1;
     let activeBet = BET_STEPS[betIndex];
 
-    const VIP_SCRIPT_COST = 1000000;
-    const BINANCE_COST    = 100000000;
+    const VIP_SCRIPT_COST = 1000000;       
+    const BINANCE_COST    = 100000000;     
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
+
+    // === ИДЕНТИФИКАЦИЯ ОПЕРАТОРА ДЛЯ БАЗЫ ДАННЫХ ===
+    function getMyOperatorNames() {
+        const names = ['calvin', 'келвин']; 
+        const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
+        if (profileNameEl) names.push(profileNameEl.innerText.trim().toLowerCase());
+        const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
+        if (profileImg) names.push(profileImg.alt.trim().toLowerCase());
+        return names;
+    }
+
+    function getDbSafeOperatorName() {
+        const names = getMyOperatorNames();
+        const primaryName = names.length > 0 ? names[0] : 'unknown_operator';
+        return primaryName.replace(/[.#$\[\]]/g, '_');
+    }
+
+    const operatorDbId = getDbSafeOperatorName();
+    const userRef = db.ref(`operators/${operatorDbId}`);
+
+    userRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            balance = data.balance !== undefined ? data.balance : 0;
+            historyLog = data.history || [];
+            hasCalvinScript = data.hasVip || false;
+            hasBinance = data.hasBinance || false;
+            
+            if (document.getElementById('modal-balance')) {
+                document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
+                document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
+            }
+            updateUIState();
+            renderHistory();
+            renderShop();
+        }
+    });
+
+    userRef.once('value').then((snapshot) => {
+        if (!snapshot.exists()) {
+            pushToCloud();
+        }
+    });
+
+    function pushToCloud() {
+        userRef.set({
+            balance: balance,
+            history: historyLog,
+            hasVip: hasCalvinScript,
+            hasBinance: hasBinance,
+            lastActive: new Date().toISOString()
+        });
+    }
 
     function getDynamicStrip(isBonus, index) {
         const v = index / (BET_STEPS.length - 1);
@@ -141,7 +212,7 @@
     modal.id = 'slot-modal';
     modal.innerHTML = `
         <div class="modal-header" id="modal-drag-handle">
-            <span id="modal-balance" title="Точный баланс: ${balance}">🪙 ${formatNum(balance)}</span>
+            <span id="modal-balance" title="Загрузка облака...">🪙 Загрузка...</span>
             <div class="header-controls">
                 <button class="tab-btn" id="btn-hist" title="История">📜</button>
                 <button class="tab-btn" id="btn-shop" title="Магазин">🛒</button>
@@ -212,15 +283,21 @@
     });
     document.addEventListener('mouseup', () => { isDragging = false; });
 
+    unsafeWindow.addCazCoins = function(amount) {
+        updateBalance(amount, "Пополнение Администратором");
+        console.log(`%c 💰 Успешно начислено ${amount} монет! `, 'background: #181825; color: #a6e3a1; font-weight: bold; font-size: 14px; padding: 4px;');
+    };
+
     function logHistory(amount, type) {
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
         if (historyLog.length > 40) historyLog.pop();
-        GM_setValue("operator_history", historyLog);
-        renderHistory();
+        // Запись в Firebase
+        pushToCloud();
     }
 
     function renderHistory() {
+        if (!panelHist) return;
         panelHist.innerHTML = historyLog.length === 0 ? '<div style="text-align:center; color:#6c7086;">История пуста</div>' : '';
         historyLog.forEach(item => {
             const isPos = item.amount > 0;
@@ -229,12 +306,12 @@
             panelHist.innerHTML += `<div class="hist-item"><span class="hist-time">[${item.time}]</span><span class="hist-type">${item.type}</span><span class="${colorClass}">${sign}${formatNum(item.amount)}</span></div>`;
         });
     }
-    renderHistory();
 
     function renderShop() {
+        if (!panelShop) return;
         panelShop.innerHTML = `
             <div class="shop-item">
-                <span><b>Скрипт от Calvin</b> (персональный по возможности)</span>
+                <span><b>Скрипт от Calvin</b> (по возможности на заказ)</span>
                 ${hasCalvinScript ? '<span style="color:#a6e3a1; font-weight:bold;">КУПЛЕНО ✔️</span>' : `<button class="buy-shop-btn" id="btn-buy-vip">Купить за ${formatNum(VIP_SCRIPT_COST)} 🪙</button>`}
             </div>
             <hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">
@@ -248,10 +325,9 @@
         if (btnBuyVip) {
             btnBuyVip.onclick = () => {
                 if (balance >= VIP_SCRIPT_COST) {
+                    hasCalvinScript = true;
                     updateBalance(-VIP_SCRIPT_COST, "Покупка VIP скрипта");
-                    GM_setValue("operator_has_vip", true); hasCalvinScript = true;
                     modal.style.borderColor = "#f9e2af";
-                    renderShop();
                     triggerCoinRain();
                 } else { alert(`Нужно ${formatNum(VIP_SCRIPT_COST)} 🪙`); }
             };
@@ -261,27 +337,35 @@
         if (btnBuyBinance) {
             btnBuyBinance.onclick = () => {
                 if (balance >= BINANCE_COST) {
+                    hasBinance = true;
                     updateBalance(-BINANCE_COST, "Вывод 10$ на Binance");
-                    GM_setValue("operator_has_binance", true); hasBinance = true;
-                    renderShop();
                     triggerCoinRain();
                     alert("Заявка на 10$ отправлена!");
                 } else { alert(`Нужно ${formatNum(BINANCE_COST)} 🪙`); }
             };
         }
     }
-    renderShop();
 
     function updateBalance(amount, logType = null) {
         balance = Math.round((balance + amount) * 10) / 10;
-        GM_setValue("operator_coins", balance);
-        uiBalance.innerText = `🪙 ${formatNum(balance)}`;
-        uiBalance.title = `Точный баланс: ${balance}`;
+        
+        if (uiBalance) {
+            uiBalance.innerText = `🪙 ${formatNum(balance)}`;
+            uiBalance.title = `Точный баланс: ${balance}`;
+        }
+        
         updateUIState();
-        if (logType) logHistory(amount, logType);
+        
+        if (logType) {
+            logHistory(amount, logType);
+        } else {
+            pushToCloud();
+        }
     }
 
     function updateUIState() {
+        if (!betDisplay) return;
+        
         const currentBet = BET_STEPS[betIndex];
         betDisplay.innerText = `Ставка: ${formatNum(currentBet)}`;
 
@@ -303,7 +387,6 @@
         btnBonus.disabled = locked || balance < (currentBet * 100);
         btnSpin.disabled = isSpinning;
     }
-    updateUIState();
 
     function getRandomSymbol(isBonus, index) {
         const strip = getDynamicStrip(isBonus, index);
@@ -465,18 +548,6 @@
     };
 
 
-    function getMyOperatorNames() {
-        const names = ['calvin', 'келвин'];
-
-        const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
-        if (profileNameEl) names.push(profileNameEl.innerText.trim().toLowerCase());
-
-        const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
-        if (profileImg) names.push(profileImg.alt.trim().toLowerCase());
-
-        return names;
-    }
-
     function isMyMessage(msgElement) {
         if (!msgElement.classList.contains('justify-end')) return false;
 
@@ -491,15 +562,15 @@
     function scanForActivities() {
         let hasNew = false;
         const myNames = getMyOperatorNames();
-
+        
         const messages = document.querySelectorAll('.message-bubble-container');
         messages.forEach(msgElement => {
             const msgId = msgElement.getAttribute('data-message-id');
             const updatedAtStr = msgElement.getAttribute('updatedat');
-
+            
             if (!msgId || !/^\d+$/.test(msgId) || !updatedAtStr) return;
             if (processedEventIds.has(msgId)) return;
-
+            
             const msgTime = new Date(updatedAtStr).getTime();
             if (Date.now() - msgTime > 300000) {
                 processedEventIds.add(msgId);
@@ -513,14 +584,14 @@
                 }
                 processedEventIds.add(msgId);
                 hasNew = true;
-            }
-
+            } 
             else if (msgElement.classList.contains('justify-center')) {
                 const sysNotif = msgElement.querySelector('span[title*="добавил"], span[title*="удалил"]');
                 if (sysNotif) {
                     const titleText = sysNotif.getAttribute('title').toLowerCase();
                     const isAdded = titleText.includes('добавил');
                     const isRemoved = titleText.includes('удалил');
+                    
                     let mySaleTagFound = false;
                     for (let name of myNames) {
                         if (titleText.includes(`${name}-продажа`)) {
@@ -528,7 +599,7 @@
                             break;
                         }
                     }
-
+                    
                     if (mySaleTagFound) {
                         if (isAdded) {
                             const actionAuthor = titleText.split(' ')[0];
@@ -550,7 +621,7 @@
 
         if (hasNew) {
             let arr = Array.from(processedEventIds);
-            if (arr.length > 500) arr = arr.slice(-500);
+            if (arr.length > 500) arr = arr.slice(-500); 
             GM_setValue("operator_processed_events", arr);
         }
     }
@@ -578,7 +649,7 @@
 
         scanForActivities();
     }));
-
+    
     observer.observe(document.body, { childList: true, subtree: true });
 
 })();
