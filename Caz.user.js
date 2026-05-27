@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.6
+// @version      3.7
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -525,9 +525,6 @@ function formatNum(num) {
 
         scanForActivities();
     }));
-    
-    observer.observe(document.body, { childList: true, subtree: true });
-})();
     
     observer.observe(document.body, { childList: true, subtree: true });
 })();
