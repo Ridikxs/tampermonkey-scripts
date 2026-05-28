@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.8
+// @version      3.9
 // @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -29,7 +29,7 @@
         appId: "1:392005607485:web:7f6b751f947986e96cca54"
     };
 
-function formatNum(num) {
+    function formatNum(num) {
         return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
     }
 
@@ -75,7 +75,22 @@ function formatNum(num) {
         }
     }
 
-    // === ИНИЦИАЛИЗАЦИЯ FIREBASE ===
+    function triggerCoinRain() {
+        const rainContainer = document.createElement('div');
+        rainContainer.id = 'coin-rain-container';
+        document.body.appendChild(rainContainer);
+        for (let i = 0; i < 150; i++) {
+            const coin = document.createElement('div');
+            coin.innerText = Math.random() > 0.5 ? '🪙' : '💵';
+            coin.className = 'falling-coin';
+            coin.style.left = Math.random() * 100 + 'vw';
+            coin.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
+            coin.style.animationDelay = (Math.random() * 1.5) + 's';
+            rainContainer.appendChild(coin);
+        }
+        setTimeout(() => rainContainer.remove(), 4000);
+    }
+
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
@@ -88,20 +103,20 @@ function formatNum(num) {
     let hasCalvinScript = false;
     let hasBinance = false;
     let isCloudInitialized = false;
+    let isDataLoaded = false;
     let userRef = null;
-    
+
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
 
     let isSpinning = false;
     let freeSpins = 0;
 
-    const VIP_SCRIPT_COST = 1000000;       
-    const BINANCE_COST    = 100000000;     
+    const VIP_SCRIPT_COST = 1000000;
+    const BINANCE_COST    = 100000000;
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
-    // === ИДЕНТИФИКАЦИЯ ТЕКУЩЕГО ОПЕРАТОРА ===
     function getMyOperatorNames() {
         const names = [];
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
@@ -125,28 +140,25 @@ function formatNum(num) {
         userRef = db.ref(`operators/${operatorDbId}`);
 
         userRef.on('value', (snapshot) => {
+            isDataLoaded = true;
             const data = snapshot.val();
             if (data) {
                 balance = data.balance !== undefined ? data.balance : 0;
                 historyLog = data.history || [];
                 hasCalvinScript = data.hasVip || false;
                 hasBinance = data.hasBinance || false;
-                
-                if (document.getElementById('modal-balance')) {
-                    document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
-                    document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
-                }
-                updateUIState();
-                renderHistory();
-                renderShop();
-            }
-        });
-
-        userRef.once('value').then((snapshot) => {
-            if (!snapshot.exists()) {
+            } else {
                 balance = 1000;
                 pushToCloud();
             }
+
+            if (document.getElementById('modal-balance')) {
+                document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
+                document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
+            }
+            updateUIState();
+            renderHistory();
+            renderShop();
         });
 
         isCloudInitialized = true;
@@ -155,7 +167,7 @@ function formatNum(num) {
     }
 
     function pushToCloud() {
-        if (!isCloudInitialized || !userRef) return;
+        if (!isCloudInitialized || !userRef || !isDataLoaded) return;
         userRef.set({
             balance: balance,
             history: historyLog,
@@ -165,7 +177,6 @@ function formatNum(num) {
         });
     }
 
-    // === СТИЛИ ===
     GM_addStyle(`
         .sparkmoth-casino-logo { cursor: pointer !important; transition: all 0.3s ease; position: relative; }
         .sparkmoth-casino-logo:hover { transform: scale(1.15); filter: drop-shadow(0 0 5px #b4befe); }
@@ -213,7 +224,6 @@ function formatNum(num) {
         @keyframes coinFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0; } }
     `);
 
-    // === ИНТЕРФЕЙС ===
     const modal = document.createElement('div');
     modal.id = 'slot-modal';
     modal.innerHTML = `
@@ -261,7 +271,6 @@ function formatNum(num) {
     const btnBetDown = document.getElementById('btn-bet-down');
     const btnBetMax = document.getElementById('btn-bet-max');
 
-    // === ДРАГ-Н-ДРОП ===
     const dragHandle = document.getElementById('modal-drag-handle');
     let isDragging = false, dragStartX, dragStartY;
     dragHandle.addEventListener('mousedown', (e) => {
@@ -281,13 +290,13 @@ function formatNum(num) {
     });
     document.addEventListener('mouseup', () => { isDragging = false; });
 
-    // === МОСТ ДЛЯ КОНСОЛИ ===
     unsafeWindow.addCazCoins = function(amount) {
-        if (!tryInitializeCloud()) return;
+        if (!tryInitializeCloud() || !isDataLoaded) return;
         updateBalance(amount, "Пополнение Администратором");
     };
 
     function updateBalance(amount, logType = null) {
+        if (!isDataLoaded) return;
         balance = Math.round((balance + amount) * 10) / 10;
         if (uiBalance) {
             uiBalance.innerText = `🪙 ${formatNum(balance)}`;
@@ -371,9 +380,8 @@ function formatNum(num) {
         btnSpin.disabled = isSpinning;
     }
 
-    // === КРУТКА СЛОТОВ ===
     function performSpin() {
-        if (!isCloudInitialized) {
+        if (!isDataLoaded) {
             if (!tryInitializeCloud()) {
                 msg.innerText = "Ожидание сети..."; return;
             }
@@ -381,12 +389,12 @@ function formatNum(num) {
         const currentBet = BET_STEPS[betIndex];
         if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
         isSpinning = true;
-        if (panelHist) panelHist.style.display = 'none'; 
+        if (panelHist) panelHist.style.display = 'none';
         if (panelShop) panelShop.style.display = 'none';
-        
-        if (freeSpins === 0) { activeBet = currentBet; updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`); } 
+
+        if (freeSpins === 0) { activeBet = currentBet; updateBalance(-activeBet, `Ставка (${formatNum(activeBet)})`); }
         else { freeSpins--; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; if (freeSpins === 0 && fsCounter) fsCounter.innerText = "Последний спин!"; }
-        
+
         updateUIState();
         msg.innerText = "Крутим..."; msg.style.color = "#cdd6f4";
         let ticks = 0;
@@ -411,31 +419,30 @@ function formatNum(num) {
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
         const luck = Math.random();
-        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } } 
+        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } }
         else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
-        
+
         if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
         if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
         if (document.getElementById('reel-3')) document.getElementById('reel-3').innerText = r3.symbol;
-        
+
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
         let wonAmount = 0; let winType = "";
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; } 
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; }
         else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
-        
+
         if (wonAmount > 0) {
             updateBalance(wonAmount, winType);
-            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); } 
-            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; } 
+            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); }
+            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; }
             else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
         } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
-        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; } 
+        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; }
         else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
         if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; if (fsCounter) fsCounter.innerText = ""; updateUIState(); }
     }
 
-    // === СОБЫТИЯ ===
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
@@ -444,7 +451,7 @@ function formatNum(num) {
     document.getElementById('btn-close-slots').onclick = () => { modal.style.display = 'none'; };
     document.getElementById('btn-spin').onclick = performSpin;
     document.getElementById('btn-buy-bonus').onclick = () => {
-        if (!isCloudInitialized) return;
+        if (!isDataLoaded) return;
         const cost = BET_STEPS[betIndex] * 100;
         if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
     };
@@ -458,9 +465,9 @@ function formatNum(num) {
         return myNames.includes(msgName);
     }
 
-    // === ПАРСИНГ РАБОЧИХ ДЕЙСТВИЙ ===
     function scanForActivities() {
-        if (!tryInitializeCloud()) return;
+        if (!tryInitializeCloud() || !isDataLoaded) return;
+
         const myNames = getMyOperatorNames();
         const messages = document.querySelectorAll('.message-bubble-container');
         let hasNew = false;
@@ -470,14 +477,14 @@ function formatNum(num) {
             const updatedAtStr = msgElement.getAttribute('updatedat');
             if (!msgId || !/^\d+$/.test(msgId) || !updatedAtStr) return;
             if (processedEventIds.has(msgId)) return;
-            
+
             const msgTime = new Date(updatedAtStr).getTime();
             if (Date.now() - msgTime > 300000) { processedEventIds.add(msgId); hasNew = true; return; }
 
             if (msgElement.classList.contains('justify-end')) {
                 if (isMyMessage(msgElement)) { updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)"); }
                 processedEventIds.add(msgId); hasNew = true;
-            } 
+            }
             else if (msgElement.classList.contains('justify-center')) {
                 const sysNotif = msgElement.querySelector('span[title*="добавил"], span[title*="удалил"]');
                 if (sysNotif) {
@@ -486,9 +493,9 @@ function formatNum(num) {
                     const isRemoved = titleText.includes('удалил');
                     let mySaleTagFound = false;
                     for (let name of myNames) { if (titleText.includes(`${name}-продажа`)) { mySaleTagFound = true; break; } }
-                    
+
                     if (mySaleTagFound) {
-                        if (isAdded) { const actionAuthor = titleText.split(' ')[0]; if (myNames.includes(actionAuthor)) { updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); } } 
+                        if (isAdded) { const actionAuthor = titleText.split(' ')[0]; if (myNames.includes(actionAuthor)) { updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); } }
                         else if (isRemoved) { updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)"); }
                     }
                 }
@@ -498,12 +505,11 @@ function formatNum(num) {
 
         if (hasNew) {
             let arr = Array.from(processedEventIds);
-            if (arr.length > 500) arr = arr.slice(-500); 
+            if (arr.length > 500) arr = arr.slice(-500);
             GM_setValue("operator_processed_events", arr);
         }
     }
 
-    // === MUTATION OBSERVER ===
     let logoReplaced = false;
     const observer = new MutationObserver(((mutations, obs) => {
         tryInitializeCloud();
@@ -515,7 +521,7 @@ function formatNum(num) {
                 container.classList.add('sparkmoth-casino-logo');
                 container.addEventListener('click', function(e) {
                     e.preventDefault(); e.stopPropagation();
-                    if (!tryInitializeCloud()) { alert("Скрипт ожидает прогрузки профиля Sparkmoth..."); return; }
+                    if (!tryInitializeCloud() || !isDataLoaded) { alert("Скрипт ожидает прогрузки профиля Sparkmoth..."); return; }
                     modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
                     if(modal.style.display === 'flex' && !modal.style.left) { modal.style.transform = 'translate(-50%, -50%)'; modal.style.left = '50%'; modal.style.top = '50%'; }
                 });
@@ -525,6 +531,6 @@ function formatNum(num) {
 
         scanForActivities();
     }));
-    
+
     observer.observe(document.body, { childList: true, subtree: true });
 })();
