@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      4.3
-// @description  Отдыхай пока нет чатов. Добавлен Топ игроков.
+// @version      4.4
+// @description  Отдыхай пока нет чатов.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js
@@ -367,7 +367,7 @@
     function renderTop() {
         if (!panelTop) return;
         panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Сбор данных...</div>';
-        
+
         db.ref('operators').once('value').then((snapshot) => {
             const data = snapshot.val();
             if (!data) {
@@ -469,8 +469,9 @@
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
         const luck = Math.random();
-        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } }
-        else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
+        
+        if (isBonusActive) { if (luck < 0.18) { r2 = r1; r3 = r1; } else if (luck < 0.45) { r2 = r1; } }
+        else { if (luck < 0.07) { r2 = r1; r3 = r1; } else if (luck < 0.25) { r2 = r1; } }
 
         if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
         if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
@@ -496,7 +497,7 @@
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
-    
+
     document.getElementById('btn-top').onclick = () => { panelShop.style.display = 'none'; panelHist.style.display = 'none'; panelTop.style.display = panelTop.style.display === 'block' ? 'none' : 'block'; if (panelTop.style.display === 'block') renderTop(); };
     document.getElementById('btn-hist').onclick = () => { panelShop.style.display = 'none'; panelTop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; };
     document.getElementById('btn-shop').onclick = () => { panelHist.style.display = 'none'; panelTop.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; };
