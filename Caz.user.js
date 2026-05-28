@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      3.9
-// @description  Отдыхай пока нет чатов
+// @version      4.0
+// @description  Отдыхай пока нет чатов. Добавлен Топ игроков.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js
@@ -230,11 +230,13 @@
         <div class="modal-header" id="modal-drag-handle">
             <span id="modal-balance" title="Ожидание авторизации...">🪙 Ожидание...</span>
             <div class="header-controls">
+                <button class="tab-btn" id="btn-top" title="Топ игроков">🏆</button>
                 <button class="tab-btn" id="btn-hist" title="История">📜</button>
                 <button class="tab-btn" id="btn-shop" title="Магазин">🛒</button>
                 <button class="close-btn" id="btn-close-slots">✖</button>
             </div>
         </div>
+        <div class="side-panel" id="panel-top"></div>
         <div class="side-panel" id="panel-history"></div>
         <div class="side-panel" id="panel-shop"></div>
         <div id="fs-counter"></div>
@@ -263,6 +265,7 @@
     const fsCounter = document.getElementById('fs-counter');
     const btnSpin = document.getElementById('btn-spin');
     const btnBonus = document.getElementById('btn-buy-bonus');
+    const panelTop = document.getElementById('panel-top');
     const panelHist = document.getElementById('panel-history');
     const panelShop = document.getElementById('panel-shop');
     const betDisplay = document.getElementById('bet-display');
@@ -361,6 +364,52 @@
         }
     }
 
+    function renderTop() {
+        if (!panelTop) return;
+        panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Сбор данных...</div>';
+
+        db.ref('operators').once('value').then((snapshot) => {
+            const data = snapshot.val();
+            if (!data) {
+                panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Нет данных</div>';
+                return;
+            }
+
+            let players = [];
+            for (let key in data) {
+                players.push({ name: key, balance: data[key].balance || 0 });
+            }
+
+            players.sort((a, b) => b.balance - a.balance);
+
+            let html = '';
+            for (let i = 0; i < Math.min(3, players.length); i++) {
+                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
+                            <span>${medal}</span>
+                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
+                            <span class="hist-pos">🪙 ${formatNum(players[i].balance)}</span>
+                         </div>`;
+            }
+
+            html += `<hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">`;
+
+            const names = getMyOperatorNames();
+            const myName = names.length > 0 ? names[0].replace(/[.#$\[\]]/g, '_') : 'unknown';
+            const myIndex = players.findIndex(p => p.name === myName);
+
+            if (myIndex !== -1) {
+                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
+                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndex + 1}</span>
+                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #f9e2af; font-weight: bold;">Вы (${myName})</span>
+                            <span class="hist-pos">🪙 ${formatNum(players[myIndex].balance)}</span>
+                         </div>`;
+            }
+
+            panelTop.innerHTML = html;
+        });
+    }
+
     function updateUIState() {
         if (!betDisplay) return;
         const currentBet = BET_STEPS[betIndex];
@@ -389,6 +438,7 @@
         const currentBet = BET_STEPS[betIndex];
         if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
         isSpinning = true;
+        if (panelTop) panelTop.style.display = 'none';
         if (panelHist) panelHist.style.display = 'none';
         if (panelShop) panelShop.style.display = 'none';
 
@@ -446,8 +496,10 @@
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
     btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
     btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
-    document.getElementById('btn-hist').onclick = () => { panelShop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; };
-    document.getElementById('btn-shop').onclick = () => { panelHist.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; };
+
+    document.getElementById('btn-top').onclick = () => { panelShop.style.display = 'none'; panelHist.style.display = 'none'; panelTop.style.display = panelTop.style.display === 'block' ? 'none' : 'block'; if (panelTop.style.display === 'block') renderTop(); };
+    document.getElementById('btn-hist').onclick = () => { panelShop.style.display = 'none'; panelTop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; };
+    document.getElementById('btn-shop').onclick = () => { panelHist.style.display = 'none'; panelTop.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; };
     document.getElementById('btn-close-slots').onclick = () => { modal.style.display = 'none'; };
     document.getElementById('btn-spin').onclick = performSpin;
     document.getElementById('btn-buy-bonus').onclick = () => {
