@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      4.1
-// @description  Отдыхай пока нет чатов
+// @version      4.3
+// @description  Отдыхай пока нет чатов. Добавлен Топ игроков.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js
@@ -105,7 +105,6 @@
     let isCloudInitialized = false;
     let isDataLoaded = false;
     let userRef = null;
-    let globalRtp = 1.0;
 
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
@@ -117,23 +116,6 @@
     const BINANCE_COST    = 100000000;
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
-
-    db.ref('settings/globalRtp').on('value', (snap) => {
-        if (snap.exists()) {
-            globalRtp = snap.val();
-        } else {
-            db.ref('settings/globalRtp').set(1.0);
-        }
-    });
-
-    unsafeWindow.setCazRTP = function(value) {
-        if (typeof value !== 'number' || value < 0) {
-            console.error("RTP должен быть числом больше 0! Пример: setCazRTP(0.5)");
-            return;
-        }
-        db.ref('settings/globalRtp').set(value);
-        console.log(`%c [ADMIN] Глобальная отдача (RTP) изменена на: ${value}`, 'background: #f38ba8; color: #111; font-weight: bold; padding: 4px;');
-    };
 
     function getMyOperatorNames() {
         const names = [];
@@ -486,13 +468,9 @@
         let r1 = getRandomSymbol(isBonusActive, betIndex);
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
-        
         const luck = Math.random();
-        if (isBonusActive) { 
-            if (luck < 0.25 * globalRtp) { r2 = r1; r3 = r1; } else if (luck < 0.55 * globalRtp) { r2 = r1; } 
-        } else { 
-            if (luck < 0.10 * globalRtp) { r2 = r1; r3 = r1; } else if (luck < 0.30 * globalRtp) { r2 = r1; } 
-        }
+        if (isBonusActive) { if (luck < 0.25) { r2 = r1; r3 = r1; } else if (luck < 0.55) { r2 = r1; } }
+        else { if (luck < 0.10) { r2 = r1; r3 = r1; } else if (luck < 0.30) { r2 = r1; } }
 
         if (document.getElementById('reel-1')) document.getElementById('reel-1').innerText = r1.symbol;
         if (document.getElementById('reel-2')) document.getElementById('reel-2').innerText = r2.symbol;
@@ -501,7 +479,6 @@
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
         let wonAmount = 0; let winType = "";
-        
         if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; }
         else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
 
@@ -511,10 +488,8 @@
             else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; }
             else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
         } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
-        
         if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; }
         else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
-        
         if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; if (fsCounter) fsCounter.innerText = ""; updateUIState(); }
     }
 
