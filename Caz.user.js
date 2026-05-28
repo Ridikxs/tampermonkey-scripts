@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      4.4
+// @version      4.5
 // @description  Отдыхай пока нет чатов.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -18,6 +18,8 @@
 
 (function() {
     'use strict';
+
+    const SCRIPT_VERSION = "4.5";
 
     const firebaseConfig = {
         apiKey: "AIzaSyBWk-zku_Hij3KZjh_0ACQCu0z0Fj3ICZA",
@@ -99,6 +101,7 @@
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
     let balance = 0;
+    let workEarned = 0;
     let historyLog = [];
     let hasCalvinScript = false;
     let hasBinance = false;
@@ -144,11 +147,13 @@
             const data = snapshot.val();
             if (data) {
                 balance = data.balance !== undefined ? data.balance : 0;
+                workEarned = data.workEarned !== undefined ? data.workEarned : 0;
                 historyLog = data.history || [];
                 hasCalvinScript = data.hasVip || false;
                 hasBinance = data.hasBinance || false;
             } else {
                 balance = 1000;
+                workEarned = 0;
                 pushToCloud();
             }
 
@@ -170,9 +175,11 @@
         if (!isCloudInitialized || !userRef || !isDataLoaded) return;
         userRef.set({
             balance: balance,
+            workEarned: workEarned,
             history: historyLog,
             hasVip: hasCalvinScript,
             hasBinance: hasBinance,
+            version: SCRIPT_VERSION,
             lastActive: new Date().toISOString()
         });
     }
@@ -182,7 +189,7 @@
         .sparkmoth-casino-logo:hover { transform: scale(1.15); filter: drop-shadow(0 0 5px #b4befe); }
         .sparkmoth-casino-logo::after { content: ''; position: absolute; width: 100%; height: 100%; top: 0; left: 0; border-radius: 50%; border: 2px solid #a6e3a1; opacity: 0; animation: logoPulse 2s infinite; pointer-events: none; }
         @keyframes logoPulse { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }
-        #slot-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #181825; padding: 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 99999; display: none; flex-direction: column; align-items: center; border: 2px solid #b4befe; color: white; font-family: sans-serif; min-width: 380px; min-height: 420px; resize: both; overflow: auto; }
+        #slot-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #181825; padding: 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 99999; display: none; flex-direction: column; align-items: center; border: 2px solid #b4befe; color: white; font-family: sans-serif; min-width: 380px; min-height: 440px; resize: both; overflow: auto; }
         .modal-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #313244; padding-bottom: 10px; cursor: grab; user-select: none; }
         .modal-header:active { cursor: grabbing; }
         #modal-balance { font-weight: bold; color: #f9e2af; font-size: 18px; pointer-events: none; margin-right: auto;}
@@ -208,7 +215,7 @@
         .bolt-active { color: #f9e2af; text-shadow: 0 0 12px #f2cd32; transition: all 0.3s; }
         .bolt-inactive { filter: grayscale(100%); opacity: 0.15; transition: all 0.3s; }
         .bolt-max { font-size: 14px; font-weight: bold; color: #f38ba8; text-shadow: 0 0 8px #f38ba8; margin-left: 10px; font-style: italic; letter-spacing: 1px;}
-        .side-panel { display: none; width: 100%; background: #11111b; border-radius: 8px; padding: 10px; margin-top: 10px; border: 1px solid #313244; max-height: 200px; overflow-y: auto; }
+        .side-panel { display: none; width: 100%; background: #11111b; border-radius: 8px; padding: 10px; margin-top: 10px; border: 1px solid #313244; max-height: 250px; overflow-y: auto; }
         .hist-item { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; border-bottom: 1px dashed #313244; padding-bottom: 2px;}
         .hist-time { color: #a6adc8; }
         .hist-type { color: #cdd6f4; }
@@ -377,12 +384,19 @@
 
             let players = [];
             for (let key in data) {
-                players.push({ name: key, balance: data[key].balance || 0 });
+                players.push({ 
+                    name: key, 
+                    balance: data[key].balance || 0,
+                    work: data[key].workEarned || 0 
+                });
             }
 
+            const names = getMyOperatorNames();
+            const myName = names.length > 0 ? names[0].replace(/[.#$\[\]]/g, '_') : 'unknown';
+
+            let html = '<div style="color:#f9e2af; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">💰 Топ по балансу</div>';
             players.sort((a, b) => b.balance - a.balance);
 
-            let html = '';
             for (let i = 0; i < Math.min(3, players.length); i++) {
                 let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
                 html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
@@ -392,17 +406,34 @@
                          </div>`;
             }
 
-            html += `<hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 5px 0;">`;
-
-            const names = getMyOperatorNames();
-            const myName = names.length > 0 ? names[0].replace(/[.#$\[\]]/g, '_') : 'unknown';
-            const myIndex = players.findIndex(p => p.name === myName);
-
-            if (myIndex !== -1) {
-                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
-                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndex + 1}</span>
+            let myIndexBal = players.findIndex(p => p.name === myName);
+            if (myIndexBal !== -1) {
+                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(249, 226, 175, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(249, 226, 175, 0.3);">
+                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexBal + 1}</span>
                             <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #f9e2af; font-weight: bold;">Вы (${myName})</span>
-                            <span class="hist-pos">🪙 ${formatNum(players[myIndex].balance)}</span>
+                            <span class="hist-pos">🪙 ${formatNum(players[myIndexBal].balance)}</span>
+                         </div>`;
+            }
+
+            html += `<hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 10px 0;">`;
+            html += '<div style="color:#a6e3a1; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">🛠️ Топ трудяг (В чатах)</div>';
+            players.sort((a, b) => b.work - a.work);
+
+            for (let i = 0; i < Math.min(3, players.length); i++) {
+                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
+                            <span>${medal}</span>
+                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
+                            <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[i].work)}</span>
+                         </div>`;
+            }
+
+            let myIndexWork = players.findIndex(p => p.name === myName);
+            if (myIndexWork !== -1) {
+                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(166, 227, 161, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(166, 227, 161, 0.3);">
+                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexWork + 1}</span>
+                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #a6e3a1; font-weight: bold;">Вы (${myName})</span>
+                            <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[myIndexWork].work)}</span>
                          </div>`;
             }
 
@@ -535,7 +566,10 @@
             if (Date.now() - msgTime > 300000) { processedEventIds.add(msgId); hasNew = true; return; }
 
             if (msgElement.classList.contains('justify-end')) {
-                if (isMyMessage(msgElement)) { updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)"); }
+                if (isMyMessage(msgElement)) { 
+                    workEarned = Math.round((workEarned + COINS_PER_MESSAGE) * 10) / 10;
+                    updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)"); 
+                }
                 processedEventIds.add(msgId); hasNew = true;
             }
             else if (msgElement.classList.contains('justify-center')) {
@@ -548,8 +582,17 @@
                     for (let name of myNames) { if (titleText.includes(`${name}-продажа`)) { mySaleTagFound = true; break; } }
 
                     if (mySaleTagFound) {
-                        if (isAdded) { const actionAuthor = titleText.split(' ')[0]; if (myNames.includes(actionAuthor)) { updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); } }
-                        else if (isRemoved) { updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)"); }
+                        if (isAdded) { 
+                            const actionAuthor = titleText.split(' ')[0]; 
+                            if (myNames.includes(actionAuthor)) { 
+                                workEarned = Math.round((workEarned + COINS_PER_TAG) * 10) / 10;
+                                updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); 
+                            } 
+                        }
+                        else if (isRemoved) { 
+                            workEarned = Math.round((workEarned - COINS_PER_TAG) * 10) / 10;
+                            updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)"); 
+                        }
                     }
                 }
                 processedEventIds.add(msgId); hasNew = true;
