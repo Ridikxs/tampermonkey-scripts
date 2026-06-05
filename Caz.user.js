@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      4.5
-// @description  Отдыхай пока нет чатов.
+// @version      5.0
+// @description  Играй пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
-// @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js
-// @require      https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @connect      sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Caz.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Caz.user.js
 // @run-at       document-end
@@ -19,17 +19,8 @@
 (function() {
     'use strict';
 
-    const SCRIPT_VERSION = "4.5";
-
-    const firebaseConfig = {
-        apiKey: "AIzaSyBWk-zku_Hij3KZjh_0ACQCu0z0Fj3ICZA",
-        authDomain: "https://sparkmothv1.firebaseapp.com",
-        databaseURL: "https://sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "sparkmothv1",
-        storageBucket: "https://sparkmothv1.firebasestorage.app",
-        messagingSenderId: "392005607485",
-        appId: "1:392005607485:web:7f6b751f947986e96cca54"
-    };
+    const SCRIPT_VERSION = "5.0";
+    const DB_URL = "https://sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app";
 
     function formatNum(num) {
         return Number(num).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
@@ -93,11 +84,6 @@
         setTimeout(() => rainContainer.remove(), 4000);
     }
 
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.database();
-
     const LOGO_IMG_SELECTOR = 'img[src="/brand-assets/logo_thumbnail.svg"]';
 
     let balance = 0;
@@ -107,7 +93,7 @@
     let hasBinance = false;
     let isCloudInitialized = false;
     let isDataLoaded = false;
-    let userRef = null;
+    let myDbId = null;
 
     let processedEventIdsArr = GM_getValue("operator_processed_events", []);
     const processedEventIds = new Set(processedEventIdsArr);
@@ -122,15 +108,24 @@
 
     function getMyOperatorNames() {
         const names = [];
+
+        const savedName = GM_getValue("caz_manual_name", null);
+        if (savedName) names.push(savedName);
+
+        const allImages = document.querySelectorAll('img[alt]');
+        allImages.forEach(img => {
+            const altText = img.alt.trim().toLowerCase();
+            if (altText && !altText.includes('logo') && !altText.includes('icon') && altText !== 'image') {
+                names.push(altText);
+            }
+        });
+
         const profileNameEl = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 .text-sm.font-medium');
         if (profileNameEl && profileNameEl.innerText.trim()) {
             names.push(profileNameEl.innerText.trim().toLowerCase());
         }
-        const profileImg = document.querySelector('.p-1.flex-shrink-0.flex.w-full.justify-between.z-10 img');
-        if (profileImg && profileImg.alt.trim()) {
-            names.push(profileImg.alt.trim().toLowerCase());
-        }
-        return names;
+
+        return [...new Set(names)].filter(Boolean);
     }
 
     function tryInitializeCloud() {
@@ -139,41 +134,68 @@
         const names = getMyOperatorNames();
         if (names.length === 0 || !names[0]) return false;
 
-        const operatorDbId = names[0].replace(/[.#$\[\]]/g, '_');
-        userRef = db.ref(`operators/${operatorDbId}`);
+        myDbId = names[0].replace(/[.#$\[\]]/g, '_');
+        isCloudInitialized = true;
+        console.log(`%c [REST] Подключение для оператора: ${myDbId}... `, 'background: #1e1e2e; color: #f9e2af; font-weight: bold;');
 
-        userRef.on('value', (snapshot) => {
-            isDataLoaded = true;
-            const data = snapshot.val();
-            if (data) {
-                balance = data.balance !== undefined ? data.balance : 0;
-                workEarned = data.workEarned !== undefined ? data.workEarned : 0;
-                historyLog = data.history || [];
-                hasCalvinScript = data.hasVip || false;
-                hasBinance = data.hasBinance || false;
-            } else {
-                balance = 1000;
-                workEarned = 0;
-                pushToCloud();
-            }
+        const msgEl = document.getElementById('slot-message');
+        if (msgEl) { msgEl.innerText = "Загрузка REST API..."; msgEl.style.color = "#f9e2af"; }
 
-            if (document.getElementById('modal-balance')) {
-                document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
-                document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: `${DB_URL}/operators/${myDbId}.json`,
+            onload: function(response) {
+                isDataLoaded = true;
+                if (response.status === 200) {
+                    let data = null;
+                    try { data = JSON.parse(response.responseText); } catch(e) {}
+
+                    if (data) {
+                        balance = data.balance !== undefined ? data.balance : 0;
+                        workEarned = data.workEarned !== undefined ? data.workEarned : 0;
+                        historyLog = data.history || [];
+                        hasCalvinScript = data.hasVip || false;
+                        hasBinance = data.hasBinance || false;
+                        console.log("%c [REST] Данные успешно загружены! 🟢", "background: #a6e3a1; color: #111; font-weight: bold;");
+                    } else {
+                        balance = 1000;
+                        workEarned = 0;
+                        console.log("%c [REST] Новый пользователь, создаем профиль...", "background: #89b4fa; color: #111; font-weight: bold;");
+                        pushToCloudREST();
+                    }
+
+                    GM_setValue("caz_manual_name", names[0]);
+                    finalizeInit();
+                } else {
+                    console.error("Ошибка REST API", response);
+                    if (document.getElementById('modal-balance')) document.getElementById('modal-balance').innerText = "❌ Ошибка базы";
+                }
+            },
+            onerror: function(err) {
+                console.error("REST Network Error", err);
+                if (document.getElementById('modal-balance')) document.getElementById('modal-balance').innerText = "❌ Блок сети";
             }
-            updateUIState();
-            renderHistory();
-            renderShop();
         });
 
-        isCloudInitialized = true;
-        console.log(`%c HUD: Подключено облако для оператора: ${operatorDbId} `, 'background: #1e1e2e; color: #a6e3a1; font-weight: bold;');
         return true;
     }
 
-    function pushToCloud() {
-        if (!isCloudInitialized || !userRef || !isDataLoaded) return;
-        userRef.set({
+    function finalizeInit() {
+        if (document.getElementById('modal-balance')) {
+            document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
+            document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
+            document.getElementById('slot-message').innerText = "Готово к игре!";
+            document.getElementById('slot-message').style.color = "#a6e3a1";
+        }
+        updateUIState();
+        renderHistory();
+        renderShop();
+    }
+
+    function pushToCloudREST() {
+        if (!isCloudInitialized || !myDbId || !isDataLoaded) return;
+
+        const payload = {
             balance: balance,
             workEarned: workEarned,
             history: historyLog,
@@ -181,6 +203,13 @@
             hasBinance: hasBinance,
             version: SCRIPT_VERSION,
             lastActive: new Date().toISOString()
+        };
+
+        GM_xmlhttpRequest({
+            method: "PUT",
+            url: `${DB_URL}/operators/${myDbId}.json`,
+            data: JSON.stringify(payload),
+            headers: { "Content-Type": "application/json" }
         });
     }
 
@@ -258,7 +287,7 @@
             <button class="bet-btn" id="btn-bet-up">➕</button>
             <button class="bet-btn" id="btn-bet-max">MAX</button>
         </div>
-        <div id="slot-message">Выбери ставку!</div>
+        <div id="slot-message">Ожидание подключения...</div>
         <div class="slot-controls">
             <button class="bonus-btn" id="btn-buy-bonus">Бонус (${formatNum(5000)})</button>
             <button class="spin-btn" id="btn-spin">Spin</button>
@@ -313,14 +342,14 @@
             uiBalance.title = `Точный баланс: ${balance}`;
         }
         updateUIState();
-        if (logType) { logHistory(amount, logType); } else { pushToCloud(); }
+        if (logType) { logHistory(amount, logType); } else { pushToCloudREST(); }
     }
 
     function logHistory(amount, type) {
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
         if (historyLog.length > 40) historyLog.pop();
-        pushToCloud();
+        pushToCloudREST();
     }
 
     function renderHistory() {
@@ -375,69 +404,79 @@
         if (!panelTop) return;
         panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Сбор данных...</div>';
 
-        db.ref('operators').once('value').then((snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Нет данных</div>';
-                return;
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: `${DB_URL}/operators.json`,
+            onload: function(response) {
+                if (response.status === 200) {
+                    let data = null;
+                    try { data = JSON.parse(response.responseText); } catch(e) {}
+
+                    if (!data) {
+                        panelTop.innerHTML = '<div style="text-align:center; color:#6c7086;">Нет данных</div>';
+                        return;
+                    }
+
+                    let players = [];
+                    for (let key in data) {
+                        players.push({
+                            name: key,
+                            balance: data[key].balance || 0,
+                            work: data[key].workEarned || 0
+                        });
+                    }
+
+                    const names = getMyOperatorNames();
+                    const myName = names.length > 0 ? names[0].replace(/[.#$\[\]]/g, '_') : 'unknown';
+
+                    let html = '<div style="color:#f9e2af; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">💰 Топ по балансу</div>';
+                    players.sort((a, b) => b.balance - a.balance);
+
+                    for (let i = 0; i < Math.min(3, players.length); i++) {
+                        let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                        html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
+                                    <span>${medal}</span>
+                                    <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
+                                    <span class="hist-pos">🪙 ${formatNum(players[i].balance)}</span>
+                                 </div>`;
+                    }
+
+                    let myIndexBal = players.findIndex(p => p.name === myName);
+                    if (myIndexBal !== -1) {
+                        html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(249, 226, 175, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(249, 226, 175, 0.3);">
+                                    <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexBal + 1}</span>
+                                    <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #f9e2af; font-weight: bold;">Вы (${myName})</span>
+                                    <span class="hist-pos">🪙 ${formatNum(players[myIndexBal].balance)}</span>
+                                 </div>`;
+                    }
+
+                    html += `<hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 10px 0;">`;
+                    html += '<div style="color:#a6e3a1; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">🛠️ Топ трудяг (В чатах)</div>';
+                    players.sort((a, b) => b.work - a.work);
+
+                    for (let i = 0; i < Math.min(3, players.length); i++) {
+                        let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+                        html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
+                                    <span>${medal}</span>
+                                    <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
+                                    <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[i].work)}</span>
+                                 </div>`;
+                    }
+
+                    let myIndexWork = players.findIndex(p => p.name === myName);
+                    if (myIndexWork !== -1) {
+                        html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(166, 227, 161, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(166, 227, 161, 0.3);">
+                                    <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexWork + 1}</span>
+                                    <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #a6e3a1; font-weight: bold;">Вы (${myName})</span>
+                                    <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[myIndexWork].work)}</span>
+                                 </div>`;
+                    }
+
+                    panelTop.innerHTML = html;
+                } else {
+                    panelTop.innerHTML = '<div style="text-align:center; color:#f38ba8;">Ошибка загрузки Топа</div>';
+                }
             }
-
-            let players = [];
-            for (let key in data) {
-                players.push({ 
-                    name: key, 
-                    balance: data[key].balance || 0,
-                    work: data[key].workEarned || 0 
-                });
-            }
-
-            const names = getMyOperatorNames();
-            const myName = names.length > 0 ? names[0].replace(/[.#$\[\]]/g, '_') : 'unknown';
-
-            let html = '<div style="color:#f9e2af; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">💰 Топ по балансу</div>';
-            players.sort((a, b) => b.balance - a.balance);
-
-            for (let i = 0; i < Math.min(3, players.length); i++) {
-                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
-                            <span>${medal}</span>
-                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
-                            <span class="hist-pos">🪙 ${formatNum(players[i].balance)}</span>
-                         </div>`;
-            }
-
-            let myIndexBal = players.findIndex(p => p.name === myName);
-            if (myIndexBal !== -1) {
-                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(249, 226, 175, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(249, 226, 175, 0.3);">
-                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexBal + 1}</span>
-                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #f9e2af; font-weight: bold;">Вы (${myName})</span>
-                            <span class="hist-pos">🪙 ${formatNum(players[myIndexBal].balance)}</span>
-                         </div>`;
-            }
-
-            html += `<hr style="border:0; border-top: 1px dashed #313244; width: 100%; margin: 10px 0;">`;
-            html += '<div style="color:#a6e3a1; font-weight:bold; margin-bottom:5px; text-align:center; text-transform:uppercase;">🛠️ Топ трудяг (В чатах)</div>';
-            players.sort((a, b) => b.work - a.work);
-
-            for (let i = 0; i < Math.min(3, players.length); i++) {
-                let medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px;">
-                            <span>${medal}</span>
-                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1;">${players[i].name}</span>
-                            <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[i].work)}</span>
-                         </div>`;
-            }
-
-            let myIndexWork = players.findIndex(p => p.name === myName);
-            if (myIndexWork !== -1) {
-                html += `<div class="hist-item" style="justify-content: flex-start; gap: 10px; background: rgba(166, 227, 161, 0.1); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(166, 227, 161, 0.3);">
-                            <span style="color: #a6adc8; width: 20px; text-align: center; font-weight: bold;">#${myIndexWork + 1}</span>
-                            <span class="hist-type" style="text-transform: capitalize; flex-grow: 1; color: #a6e3a1; font-weight: bold;">Вы (${myName})</span>
-                            <span class="hist-pos" style="color:#a6e3a1;">🪙 ${formatNum(players[myIndexWork].work)}</span>
-                         </div>`;
-            }
-
-            panelTop.innerHTML = html;
         });
     }
 
@@ -452,19 +491,18 @@
         if(betIndex === BET_STEPS.length - 1) boltsHtml += '<span class="bolt-max">MAX</span>';
         volContainer.innerHTML = boltsHtml;
         btnBonus.innerText = `Купить Бонус (${formatNum(currentBet * 100)})`;
-        const locked = isSpinning || freeSpins > 0;
+        const locked = isSpinning || freeSpins > 0 || !isDataLoaded;
         btnBetDown.disabled = locked || betIndex === 0;
         btnBetUp.disabled = locked || betIndex === BET_STEPS.length - 1;
         btnBetMax.disabled = locked || betIndex === BET_STEPS.length - 1;
         btnBonus.disabled = locked || balance < (currentBet * 100);
-        btnSpin.disabled = isSpinning;
+        btnSpin.disabled = locked;
     }
 
     function performSpin() {
         if (!isDataLoaded) {
-            if (!tryInitializeCloud()) {
-                msg.innerText = "Ожидание сети..."; return;
-            }
+            msg.innerText = "Ожидание сети...";
+            return;
         }
         const currentBet = BET_STEPS[betIndex];
         if (balance < currentBet && freeSpins === 0) { msg.innerText = "Нет монет для ставки!"; msg.style.color = "#f38ba8"; return; }
@@ -500,7 +538,7 @@
         let r2 = getRandomSymbol(isBonusActive, betIndex);
         let r3 = getRandomSymbol(isBonusActive, betIndex);
         const luck = Math.random();
-        
+
         if (isBonusActive) { if (luck < 0.18) { r2 = r1; r3 = r1; } else if (luck < 0.45) { r2 = r1; } }
         else { if (luck < 0.07) { r2 = r1; r3 = r1; } else if (luck < 0.25) { r2 = r1; } }
 
@@ -566,9 +604,9 @@
             if (Date.now() - msgTime > 300000) { processedEventIds.add(msgId); hasNew = true; return; }
 
             if (msgElement.classList.contains('justify-end')) {
-                if (isMyMessage(msgElement)) { 
+                if (isMyMessage(msgElement)) {
                     workEarned = Math.round((workEarned + COINS_PER_MESSAGE) * 10) / 10;
-                    updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)"); 
+                    updateBalance(COINS_PER_MESSAGE, "Ответ в чат (+0.1)");
                 }
                 processedEventIds.add(msgId); hasNew = true;
             }
@@ -582,16 +620,16 @@
                     for (let name of myNames) { if (titleText.includes(`${name}-продажа`)) { mySaleTagFound = true; break; } }
 
                     if (mySaleTagFound) {
-                        if (isAdded) { 
-                            const actionAuthor = titleText.split(' ')[0]; 
-                            if (myNames.includes(actionAuthor)) { 
+                        if (isAdded) {
+                            const actionAuthor = titleText.split(' ')[0];
+                            if (myNames.includes(actionAuthor)) {
                                 workEarned = Math.round((workEarned + COINS_PER_TAG) * 10) / 10;
-                                updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)"); 
-                            } 
+                                updateBalance(COINS_PER_TAG, "Тег Продажа (+0.5)");
+                            }
                         }
-                        else if (isRemoved) { 
+                        else if (isRemoved) {
                             workEarned = Math.round((workEarned - COINS_PER_TAG) * 10) / 10;
-                            updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)"); 
+                            updateBalance(-COINS_PER_TAG, "Отмена продажи (-0.5)");
                         }
                     }
                 }
@@ -615,11 +653,24 @@
             const container = img.closest('div.grid');
             if (container && !logoReplaced) {
                 container.classList.add('sparkmoth-casino-logo');
+
                 container.addEventListener('click', function(e) {
                     e.preventDefault(); e.stopPropagation();
-                    if (!tryInitializeCloud() || !isDataLoaded) { alert("Скрипт ожидает прогрузки профиля Sparkmoth..."); return; }
+
+                    if (!tryInitializeCloud()) {
+                        let manualName = prompt("Скрипт не смог найти ваш никнейм автоматически (сайт обновился).\nПожалуйста, введите ваш никнейм (например, mike):");
+                        if (manualName && manualName.trim()) {
+                            GM_setValue("caz_manual_name", manualName.trim().toLowerCase());
+                            tryInitializeCloud();
+                        }
+                    }
+
                     modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
-                    if(modal.style.display === 'flex' && !modal.style.left) { modal.style.transform = 'translate(-50%, -50%)'; modal.style.left = '50%'; modal.style.top = '50%'; }
+                    if(modal.style.display === 'flex' && !modal.style.left) {
+                        modal.style.transform = 'translate(-50%, -50%)';
+                        modal.style.left = '50%';
+                        modal.style.top = '50%';
+                    }
                 });
                 logoReplaced = true;
             }
