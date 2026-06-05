@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagChat
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Мгновенный парсинг проектов
 // @author       Calvin
 // @match        https://sparkmoth.com/*
@@ -122,16 +122,21 @@
             const chatName = nameEl.textContent.trim();
             const cached = dataCache.get(chatName) || { tags: [], project: null, status: null };
 
-            const sourceContainer = chat.querySelector('.flex.items-center.text-n-slate-11.text-xs');
+            const sourceContainer = chat.querySelector('.flex-1.min-w-0[title], .flex-1.min-w-0');
             if (!sourceContainer) return;
 
-            const iconEl = sourceContainer.querySelector('span[class^="i-"]');
+            const iconEl = sourceContainer.querySelector('.relative.inline-flex') || sourceContainer.querySelector('span[class^="i-"]');
             const truncateEl = sourceContainer.querySelector('.truncate');
 
             let dProj = cached.project;
             let dStat = cached.status;
 
-            if (!dProj && truncateEl && truncateEl.textContent.trim()) {
+            if (!dProj && sourceContainer.hasAttribute('title')) {
+                const fullText = sourceContainer.getAttribute('title').trim();
+                const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
+                dProj = match ? match[1].trim() : fullText;
+                dStat = match && match[2] ? match[2].toUpperCase() : null;
+            } else if (!dProj && truncateEl && truncateEl.textContent.trim()) {
                 const fullText = truncateEl.textContent.trim();
                 const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
                 dProj = match ? match[1].trim() : fullText;
@@ -202,5 +207,7 @@
         subtree: true,
         characterData: true
     });
+
+})();
 
 })();
