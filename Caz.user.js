@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      5.2
-// @description  REST API Bypass + Fix Scatters & History
+// @version      5.3
+// @description  Отдыхай пока нет чатов
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_addStyle
