@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      5.0
-// @description  Играй пока нет чатов
+// @version      5.2
+// @description  REST API Bypass + Fix Scatters & History
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_addStyle
@@ -19,7 +19,7 @@
 (function() {
     'use strict';
 
-    const SCRIPT_VERSION = "5.0";
+    const SCRIPT_VERSION = "5.2";
     const DB_URL = "https://sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app";
 
     function formatNum(num) {
@@ -238,7 +238,7 @@
         .spin-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
         .bonus-btn { background: #cba6f7; color: #111; padding: 10px 15px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
         .bonus-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
-        #slot-message { margin: 5px 0 10px; font-size: 16px; font-weight: bold; color: #cdd6f4; height: 20px; text-align: center;}
+        #slot-message { margin: 5px 0 10px; font-size: 16px; font-weight: bold; color: #cdd6f4; height: 20px; text-align: center; white-space: nowrap; }
         #fs-counter { color: #f38ba8; font-weight: bold; font-size: 14px; height: 16px;}
         #volatility-container { margin-top: 15px; text-align: center; font-size: 22px; letter-spacing: 4px; display: flex; justify-content: center; align-items: center; width: 100%; padding-top: 12px; border-top: 1px dashed #313244; }
         .bolt-active { color: #f9e2af; text-shadow: 0 0 12px #f2cd32; transition: all 0.3s; }
@@ -349,7 +349,9 @@
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
         if (historyLog.length > 40) historyLog.pop();
+        
         pushToCloudREST();
+        renderHistory();
     }
 
     function renderHistory() {
@@ -548,19 +550,57 @@
 
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
+        
         let wonAmount = 0; let winType = "";
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { wonAmount = Math.floor(activeBet * r1.mult); winType = `Выигрыш (x${r1.mult})`; }
-        else if (r1.symbol === r2.symbol && r1.mult > 0) { const partialMult = Math.max(0.5, r1.mult * 0.3); wonAmount = Math.floor(activeBet * partialMult); winType = `Мини-Вин (x${partialMult.toFixed(1)})`; }
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { 
+            wonAmount = Math.floor(activeBet * r1.mult); 
+            winType = `Выигрыш (x${r1.mult})`; 
+        } else if (r1.symbol === r2.symbol && r1.mult > 0) { 
+            const partialMult = Math.max(0.5, r1.mult * 0.3); 
+            wonAmount = Math.floor(activeBet * partialMult); 
+            winType = `Мини-Вин (x${partialMult.toFixed(1)})`; 
+        }
 
+        let baseMsg = "";
         if (wonAmount > 0) {
             updateBalance(wonAmount, winType);
-            if (wonAmount >= activeBet * 10) { msg.innerText = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); }
-            else if (wonAmount >= activeBet * 3) { msg.innerText = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; }
-            else { msg.innerText = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
-        } else { msg.innerText = "Нет совпадений"; msg.style.color = "#6c7086"; if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); }
-        if (scatterCount === 3) { msg.innerText = "🔮 3 СКАТТЕРА! +10 СУПЕР СПИНОВ!"; msg.style.color = "#cba6f7"; logHistory(0, "Бонуска (3 Скаттера)"); freeSpins += 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; }
-        else if (scatterCount > 0 && scatterCount < 3 && wonAmount === 0) { msg.innerText = `🔮 Скаттеры (${scatterCount}) = РЕСПИН!`; msg.style.color = "#89b4fa"; logHistory(0, "Респин (Скаттер)"); freeSpins += 1; }
-        if (freeSpins > 0) { setTimeout(performSpin, 1200); } else { isSpinning = false; if (fsCounter) fsCounter.innerText = ""; updateUIState(); }
+            if (wonAmount >= activeBet * 10) { baseMsg = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); }
+            else if (wonAmount >= activeBet * 3) { baseMsg = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; }
+            else { baseMsg = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
+        } else { 
+            baseMsg = "Нет совпадений"; 
+            msg.style.color = "#6c7086"; 
+            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); 
+        }
+
+        // --- НОВАЯ МАТЕМАТИКА СКАТТЕРОВ ---
+        if (scatterCount === 3) { 
+            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + "🔮 3 СКАТТЕРА (+10)!"; 
+            msg.style.color = "#cba6f7"; 
+            logHistory(0, "Бонуска (3 Скаттера)"); 
+            freeSpins += 10; 
+        }
+        else if (scatterCount > 0) { 
+            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + `🔮 +${scatterCount} СПИН!`; 
+            msg.style.color = "#89b4fa"; 
+            logHistory(0, `Респин (${scatterCount} Скаттер)`); 
+            freeSpins += scatterCount; 
+        } else {
+            msg.innerText = baseMsg;
+        }
+
+        // Обновляем счетчик на UI, если накинули спины
+        if (fsCounter) {
+            if (freeSpins > 0) fsCounter.innerText = `Супер Спины: ${freeSpins}`;
+            else fsCounter.innerText = "";
+        }
+
+        if (freeSpins > 0) { 
+            setTimeout(performSpin, 1200); 
+        } else { 
+            isSpinning = false; 
+            updateUIState(); 
+        }
     }
 
     btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
