@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      5.3
-// @description  Отдыхай пока нет чатов
+// @version      5.6
+// @description  Отдыхай пока нет чатов.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_addStyle
@@ -19,7 +19,7 @@
 (function() {
     'use strict';
 
-    const SCRIPT_VERSION = "5.2";
+    const SCRIPT_VERSION = "5.6";
     const DB_URL = "https://sparkmothv1-default-rtdb.europe-west1.firebasedatabase.app";
 
     function formatNum(num) {
@@ -91,6 +91,8 @@
     let historyLog = [];
     let hasCalvinScript = false;
     let hasBinance = false;
+    let cheatFlags = 0;
+    let preBanBalance = 0;
     let isCloudInitialized = false;
     let isDataLoaded = false;
     let myDbId = null;
@@ -106,9 +108,10 @@
     const COINS_PER_MESSAGE = 0.1;
     const COINS_PER_TAG = 0.5;
 
+    let clickHistory = [];
+
     function getMyOperatorNames() {
         const names = [];
-
         const savedName = GM_getValue("caz_manual_name", null);
         if (savedName) names.push(savedName);
 
@@ -124,7 +127,6 @@
         if (profileNameEl && profileNameEl.innerText.trim()) {
             names.push(profileNameEl.innerText.trim().toLowerCase());
         }
-
         return [...new Set(names)].filter(Boolean);
     }
 
@@ -136,7 +138,6 @@
 
         myDbId = names[0].replace(/[.#$\[\]]/g, '_');
         isCloudInitialized = true;
-        console.log(`%c [REST] Подключение для оператора: ${myDbId}... `, 'background: #1e1e2e; color: #f9e2af; font-weight: bold;');
 
         const msgEl = document.getElementById('slot-message');
         if (msgEl) { msgEl.innerText = "Загрузка REST API..."; msgEl.style.color = "#f9e2af"; }
@@ -156,23 +157,30 @@
                         historyLog = data.history || [];
                         hasCalvinScript = data.hasVip || false;
                         hasBinance = data.hasBinance || false;
-                        console.log("%c [REST] Данные успешно загружены! 🟢", "background: #a6e3a1; color: #111; font-weight: bold;");
+                        cheatFlags = data.cheatFlags !== undefined ? data.cheatFlags : 0;
+                        preBanBalance = data.preBanBalance !== undefined ? data.preBanBalance : 0;
+
+                        if (cheatFlags >= 50 && balance >= 0) {
+                            preBanBalance = balance;
+                            balance = -99999;
+                            pushToCloudREST();
+                        }
+
                     } else {
                         balance = 1000;
                         workEarned = 0;
-                        console.log("%c [REST] Новый пользователь, создаем профиль...", "background: #89b4fa; color: #111; font-weight: bold;");
+                        cheatFlags = 0;
+                        preBanBalance = 0;
                         pushToCloudREST();
                     }
 
                     GM_setValue("caz_manual_name", names[0]);
                     finalizeInit();
                 } else {
-                    console.error("Ошибка REST API", response);
                     if (document.getElementById('modal-balance')) document.getElementById('modal-balance').innerText = "❌ Ошибка базы";
                 }
             },
-            onerror: function(err) {
-                console.error("REST Network Error", err);
+            onerror: function() {
                 if (document.getElementById('modal-balance')) document.getElementById('modal-balance').innerText = "❌ Блок сети";
             }
         });
@@ -184,8 +192,10 @@
         if (document.getElementById('modal-balance')) {
             document.getElementById('modal-balance').innerText = `🪙 ${formatNum(balance)}`;
             document.getElementById('modal-balance').title = `Точный баланс: ${balance}`;
-            document.getElementById('slot-message').innerText = "Готово к игре!";
-            document.getElementById('slot-message').style.color = "#a6e3a1";
+            if (balance >= 0) {
+                document.getElementById('slot-message').innerText = "Готово к игре!";
+                document.getElementById('slot-message').style.color = "#a6e3a1";
+            }
         }
         updateUIState();
         renderHistory();
@@ -201,6 +211,8 @@
             history: historyLog,
             hasVip: hasCalvinScript,
             hasBinance: hasBinance,
+            cheatFlags: cheatFlags,
+            preBanBalance: preBanBalance,
             version: SCRIPT_VERSION,
             lastActive: new Date().toISOString()
         };
@@ -238,7 +250,7 @@
         .spin-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
         .bonus-btn { background: #cba6f7; color: #111; padding: 10px 15px; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
         .bonus-btn:disabled { background: #585b70; cursor: not-allowed; opacity: 0.5; }
-        #slot-message { margin: 5px 0 10px; font-size: 16px; font-weight: bold; color: #cdd6f4; height: 20px; text-align: center; white-space: nowrap; }
+        #slot-message { margin: 5px 0 10px; font-size: 14px; font-weight: bold; color: #cdd6f4; min-height: 20px; text-align: center; white-space: normal; line-height: 1.2; width: 100%;}
         #fs-counter { color: #f38ba8; font-weight: bold; font-size: 14px; height: 16px;}
         #volatility-container { margin-top: 15px; text-align: center; font-size: 22px; letter-spacing: 4px; display: flex; justify-content: center; align-items: center; width: 100%; padding-top: 12px; border-top: 1px dashed #313244; }
         .bolt-active { color: #f9e2af; text-shadow: 0 0 12px #f2cd32; transition: all 0.3s; }
@@ -349,7 +361,7 @@
         const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         historyLog.unshift({ time, amount, type });
         if (historyLog.length > 40) historyLog.pop();
-        
+
         pushToCloudREST();
         renderHistory();
     }
@@ -361,7 +373,10 @@
             const isPos = item.amount > 0;
             const sign = isPos ? '+' : '';
             const colorClass = isPos ? 'hist-pos' : (item.amount < 0 ? 'hist-neg' : 'hist-time');
-            panelHist.innerHTML += `<div class="hist-item"><span class="hist-time">[${item.time}]</span><span class="hist-type">${item.type}</span><span class="${colorClass}">${sign}${formatNum(item.amount)}</span></div>`;
+            const isCheatLog = item.type.includes("ЧИТ:") || item.type.includes("БАН:");
+            const finalColorClass = isCheatLog ? 'hist-neg' : colorClass;
+
+            panelHist.innerHTML += `<div class="hist-item"><span class="hist-time">[${item.time}]</span><span class="hist-type" style="${isCheatLog ? 'color:#f38ba8; font-weight:bold;' : ''}">${item.type}</span><span class="${finalColorClass}">${sign}${formatNum(item.amount)}</span></div>`;
         });
     }
 
@@ -380,7 +395,8 @@
         `;
         const btnBuyVip = document.getElementById('btn-buy-vip');
         if (btnBuyVip) {
-            btnBuyVip.onclick = () => {
+            btnBuyVip.onclick = (e) => {
+                if(!checkTrusted(e)) return;
                 if (balance >= VIP_SCRIPT_COST) {
                     hasCalvinScript = true;
                     updateBalance(-VIP_SCRIPT_COST, "Покупка VIP скрипта");
@@ -391,7 +407,8 @@
         }
         const btnBuyBinance = document.getElementById('btn-buy-binance');
         if (btnBuyBinance) {
-            btnBuyBinance.onclick = () => {
+            btnBuyBinance.onclick = (e) => {
+                if(!checkTrusted(e)) return;
                 if (balance >= BINANCE_COST) {
                     hasBinance = true;
                     updateBalance(-BINANCE_COST, "Вывод 10$ на Binance");
@@ -484,6 +501,18 @@
 
     function updateUIState() {
         if (!betDisplay) return;
+
+        if (balance < 0) {
+            msg.innerText = "Читы не самая лучшая вещь. Свяжитесь в ТГ для разбана: @Calvin_Radion";
+            msg.style.color = "#f38ba8";
+            btnBetDown.disabled = true;
+            btnBetUp.disabled = true;
+            btnBetMax.disabled = true;
+            btnBonus.disabled = true;
+            btnSpin.disabled = true;
+            return;
+        }
+
         const currentBet = BET_STEPS[betIndex];
         betDisplay.innerText = `Ставка: ${formatNum(currentBet)}`;
         const boltLevels = [1, 2, 3, 3, 4, 4, 5];
@@ -501,7 +530,78 @@
         btnSpin.disabled = locked;
     }
 
-    function performSpin() {
+    function triggerAntiCheat(reason) {
+        cheatFlags++;
+
+        if (cheatFlags >= 50 && balance >= 0) {
+            preBanBalance = balance;
+            balance = -99999;
+            if (uiBalance) uiBalance.innerText = `🪙 ${formatNum(balance)}`;
+            logHistory(0, `🛑 БАН: Превышен лимит нарушений`);
+            updateUIState();
+            return;
+        }
+
+        msg.innerText = "🛑 ПОДОЗРЕНИЕ В МОШЕННИЧЕСТВЕ!\nРЕПОРТ БУДЕТ ОТПРАВЛЕН КЭЛВИНУ!";
+        msg.style.color = "#f38ba8";
+
+        logHistory(0, `🛑 ЧИТ: ${reason}`);
+
+        isSpinning = true;
+        updateUIState();
+
+        setTimeout(() => {
+            if (balance >= 0) {
+                isSpinning = false;
+                updateUIState();
+                if (msg.innerText.includes("МОШЕННИЧЕСТВЕ")) {
+                    msg.innerText = "Готово к игре!";
+                    msg.style.color = "#a6e3a1";
+                }
+            }
+        }, 5000);
+    }
+
+    function checkTrusted(e) {
+        if (e && e.type === 'click' && !e.isTrusted) {
+            triggerAntiCheat("Автокликер (JS Скрипт)");
+            return false;
+        }
+
+        if (e && e.type === 'click' && e.clientX !== undefined) {
+            clickHistory.push({ x: e.clientX, y: e.clientY, time: Date.now() });
+            if (clickHistory.length > 5) clickHistory.shift();
+
+            if (clickHistory.length === 5) {
+                const sameX = clickHistory.every(c => c.x === clickHistory[0].x);
+                const sameY = clickHistory.every(c => c.y === clickHistory[0].y);
+
+                if (sameX && sameY) {
+                    clickHistory = [];
+                    triggerAntiCheat("Макрос AHK (Мертвая мышь)");
+                    return false;
+                }
+
+                let intervals = [];
+                for(let i = 1; i < clickHistory.length; i++) {
+                    intervals.push(clickHistory[i].time - clickHistory[i-1].time);
+                }
+                const maxInt = Math.max(...intervals);
+                const minInt = Math.min(...intervals);
+
+                if (maxInt - minInt < 20) {
+                    clickHistory = [];
+                    triggerAntiCheat("Макрос AHK (Машинный тайминг)");
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function performSpin(e) {
+        if (e && !checkTrusted(e)) return;
+
         if (!isDataLoaded) {
             msg.innerText = "Ожидание сети...";
             return;
@@ -550,15 +650,15 @@
 
         const symbols = [r1.symbol, r2.symbol, r3.symbol];
         const scatterCount = symbols.filter(s => s === '🔮').length;
-        
+
         let wonAmount = 0; let winType = "";
-        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) { 
-            wonAmount = Math.floor(activeBet * r1.mult); 
-            winType = `Выигрыш (x${r1.mult})`; 
-        } else if (r1.symbol === r2.symbol && r1.mult > 0) { 
-            const partialMult = Math.max(0.5, r1.mult * 0.3); 
-            wonAmount = Math.floor(activeBet * partialMult); 
-            winType = `Мини-Вин (x${partialMult.toFixed(1)})`; 
+        if (r1.symbol === r2.symbol && r2.symbol === r3.symbol && r1.mult > 0) {
+            wonAmount = Math.floor(activeBet * r1.mult);
+            winType = `Выигрыш (x${r1.mult})`;
+        } else if (r1.symbol === r2.symbol && r1.mult > 0) {
+            const partialMult = Math.max(0.5, r1.mult * 0.3);
+            wonAmount = Math.floor(activeBet * partialMult);
+            winType = `Мини-Вин (x${partialMult.toFixed(1)})`;
         }
 
         let baseMsg = "";
@@ -567,56 +667,57 @@
             if (wonAmount >= activeBet * 10) { baseMsg = `MEGA WIN! +${formatNum(wonAmount)}`; msg.style.color = "#a6e3a1"; triggerCoinRain(); }
             else if (wonAmount >= activeBet * 3) { baseMsg = `BIG WIN! +${formatNum(wonAmount)}`; msg.style.color = "#f9e2af"; }
             else { baseMsg = `Победа: +${formatNum(wonAmount)}`; msg.style.color = "#a6adc8"; }
-        } else { 
-            baseMsg = "Нет совпадений"; 
-            msg.style.color = "#6c7086"; 
-            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`); 
+        } else {
+            baseMsg = "Нет совпадений";
+            msg.style.color = "#6c7086";
+            if (freeSpins === 0 && scatterCount === 0) logHistory(0, `Проигрыш (${formatNum(activeBet)})`);
         }
 
-        // --- НОВАЯ МАТЕМАТИКА СКАТТЕРОВ ---
-        if (scatterCount === 3) { 
-            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + "🔮 3 СКАТТЕРА (+10)!"; 
-            msg.style.color = "#cba6f7"; 
-            logHistory(0, "Бонуска (3 Скаттера)"); 
-            freeSpins += 10; 
+        if (scatterCount === 3) {
+            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + "🔮 3 СКАТТЕРА (+10)!";
+            msg.style.color = "#cba6f7";
+            logHistory(0, "Бонуска (3 Скаттера)");
+            freeSpins += 10;
         }
-        else if (scatterCount > 0) { 
-            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + `🔮 +${scatterCount} СПИН!`; 
-            msg.style.color = "#89b4fa"; 
-            logHistory(0, `Респин (${scatterCount} Скаттер)`); 
-            freeSpins += scatterCount; 
+        else if (scatterCount > 0) {
+            msg.innerText = (wonAmount > 0 ? baseMsg + " и " : "") + `🔮 +${scatterCount} СПИН!`;
+            msg.style.color = "#89b4fa";
+            logHistory(0, `Респин (${scatterCount} Скаттер)`);
+            freeSpins += scatterCount;
         } else {
             msg.innerText = baseMsg;
         }
 
-        // Обновляем счетчик на UI, если накинули спины
         if (fsCounter) {
             if (freeSpins > 0) fsCounter.innerText = `Супер Спины: ${freeSpins}`;
             else fsCounter.innerText = "";
         }
 
-        if (freeSpins > 0) { 
-            setTimeout(performSpin, 1200); 
-        } else { 
-            isSpinning = false; 
-            updateUIState(); 
+        if (freeSpins > 0) {
+            setTimeout(() => performSpin(), 1200);
+        } else {
+            isSpinning = false;
+            updateUIState();
         }
     }
 
-    btnBetUp.onclick = () => { if (betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } };
-    btnBetDown.onclick = () => { if (betIndex > 0) { betIndex--; updateUIState(); } };
-    btnBetMax.onclick = () => { betIndex = BET_STEPS.length - 1; updateUIState(); };
+    btnBetUp.addEventListener('click', (e) => { if(checkTrusted(e) && betIndex < BET_STEPS.length - 1) { betIndex++; updateUIState(); } });
+    btnBetDown.addEventListener('click', (e) => { if(checkTrusted(e) && betIndex > 0) { betIndex--; updateUIState(); } });
+    btnBetMax.addEventListener('click', (e) => { if(checkTrusted(e)) { betIndex = BET_STEPS.length - 1; updateUIState(); } });
 
-    document.getElementById('btn-top').onclick = () => { panelShop.style.display = 'none'; panelHist.style.display = 'none'; panelTop.style.display = panelTop.style.display === 'block' ? 'none' : 'block'; if (panelTop.style.display === 'block') renderTop(); };
-    document.getElementById('btn-hist').onclick = () => { panelShop.style.display = 'none'; panelTop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; };
-    document.getElementById('btn-shop').onclick = () => { panelHist.style.display = 'none'; panelTop.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; };
-    document.getElementById('btn-close-slots').onclick = () => { modal.style.display = 'none'; };
-    document.getElementById('btn-spin').onclick = performSpin;
-    document.getElementById('btn-buy-bonus').onclick = () => {
+    document.getElementById('btn-top').addEventListener('click', () => { panelShop.style.display = 'none'; panelHist.style.display = 'none'; panelTop.style.display = panelTop.style.display === 'block' ? 'none' : 'block'; if (panelTop.style.display === 'block') renderTop(); });
+    document.getElementById('btn-hist').addEventListener('click', () => { panelShop.style.display = 'none'; panelTop.style.display = 'none'; panelHist.style.display = panelHist.style.display === 'block' ? 'none' : 'block'; });
+    document.getElementById('btn-shop').addEventListener('click', () => { panelHist.style.display = 'none'; panelTop.style.display = 'none'; panelShop.style.display = panelShop.style.display === 'block' ? 'none' : 'block'; });
+    document.getElementById('btn-close-slots').addEventListener('click', () => { modal.style.display = 'none'; });
+
+    document.getElementById('btn-spin').addEventListener('click', performSpin);
+
+    document.getElementById('btn-buy-bonus').addEventListener('click', (e) => {
+        if (!checkTrusted(e)) return;
         if (!isDataLoaded) return;
         const cost = BET_STEPS[betIndex] * 100;
-        if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(performSpin, 1000); }
-    };
+        if (balance >= cost && !isSpinning) { activeBet = BET_STEPS[betIndex]; updateBalance(-cost, `Покупка Бонуса (${formatNum(cost)})`); freeSpins = 10; if (fsCounter) fsCounter.innerText = `Супер Спины: ${freeSpins}`; msg.innerText = "БОНУС КУПЛЕН!"; msg.style.color = "#cba6f7"; isSpinning = true; updateUIState(); setTimeout(() => performSpin(), 1000); }
+    });
 
     function isMyMessage(msgElement) {
         if (!msgElement.classList.contains('justify-end')) return false;
