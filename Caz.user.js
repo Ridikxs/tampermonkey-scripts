@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Caz
 // @namespace    http://tampermonkey.net/
-// @version      5.6
+// @version      5.7
 // @description  Отдыхай пока нет чатов.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
+// @match        https://blueripple.xyz/*
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
