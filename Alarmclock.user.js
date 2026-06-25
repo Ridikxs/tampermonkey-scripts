@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Alarmclock
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
 // @match        https://sparkmoth.com/app/*
+// @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Alarmclock.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/Alarmclock.user.js
 // @grant        none
