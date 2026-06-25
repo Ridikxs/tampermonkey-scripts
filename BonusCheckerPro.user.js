@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         BonusCheckerPro
 // @namespace    http://tampermonkey.net/
-// @version      2.3
-// @description  Проверка бонусов для продажи
+// @version      2.4
+// @description   Проверка бонусов для продажи
 // @author       Calvin
 // @match        *://*.fundist.org/*
 // @match        *://backoffice.r7.casino/*
@@ -344,41 +344,78 @@
 
         try {
             const checkPromises = projectBonuses.map(async (b) => {
-                const url = `/ru/Users/Bonuses/${userId}?IDOrName=${b.id}`;
+                let currentUrl = `/ru/Users/Bonuses/${userId}?IDOrName=${b.id}`;
+                let lastActivationMs = 0;
+                let keepFetching = true;
+                let pagesChecked = 0;
+                const maxPages = 10; // Лимит, чтобы скрипт не ушел в бесконечный цикл
+
                 try {
-                    const response = await fetch(url, { credentials: 'same-origin' });
-                    if (!response.ok) return { bonus: b, lastActivationMs: -1 };
+                    // --- НАЧАЛО ЦИКЛА ПАГИНАЦИИ ---
+                    while (keepFetching && currentUrl && pagesChecked < maxPages) {
+                        pagesChecked++;
+                        const response = await fetch(currentUrl, { credentials: 'same-origin' });
+                        if (!response.ok) break;
 
-                    const html = await response.text();
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, "text/html");
+                        const html = await response.text();
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, "text/html");
 
-                    let lastActivationMs = 0;
-                    const rows = doc.querySelectorAll('tr[lbid], tr[id]');
+                        let pageOldestDateMs = Date.now();
+                        let foundAnyDate = false;
+                        const rows = doc.querySelectorAll('tr[lbid], tr[id]');
 
-                    rows.forEach(row => {
-                        const idCell = row.querySelector('td[name="col-IDBonus"]');
-                        const activatedCell = row.querySelector('td[name="col-Activated"]');
+                        if (rows.length === 0) break; // Если строк нет, конец истории
 
-                        if (idCell && activatedCell && idCell.textContent.includes(b.id)) {
-                            const dateText = activatedCell.textContent.trim();
-                            const dateMatch = dateText.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+                        rows.forEach(row => {
+                            const idCell = row.querySelector('td[name="col-IDBonus"]');
+                            const activatedCell = row.querySelector('td[name="col-Activated"]');
 
-                            if (dateMatch) {
-                                const day = parseInt(dateMatch[1], 10);
-                                const month = parseInt(dateMatch[2], 10) - 1;
-                                const year = parseInt(dateMatch[3], 10);
-                                const hours = parseInt(dateMatch[4], 10);
-                                const minutes = parseInt(dateMatch[5], 10);
-                                const seconds = parseInt(dateMatch[6], 10);
+                            if (activatedCell) {
+                                const dateText = activatedCell.textContent.trim();
+                                const dateMatch = dateText.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
 
-                                const activationMs = Date.UTC(year, month, day, hours, minutes, seconds);
-                                if (activationMs > lastActivationMs) {
-                                    lastActivationMs = activationMs;
+                                if (dateMatch) {
+                                    const day = parseInt(dateMatch[1], 10);
+                                    const month = parseInt(dateMatch[2], 10) - 1;
+                                    const year = parseInt(dateMatch[3], 10);
+                                    const hours = parseInt(dateMatch[4], 10);
+                                    const minutes = parseInt(dateMatch[5], 10);
+                                    const seconds = parseInt(dateMatch[6], 10);
+
+                                    const rowDateMs = Date.UTC(year, month, day, hours, minutes, seconds);
+
+                                    // Обновляем самую старую дату на текущей странице
+                                    if (rowDateMs < pageOldestDateMs) {
+                                        pageOldestDateMs = rowDateMs;
+                                    }
+                                    foundAnyDate = true;
+
+                                    // Если нашли именно наш бонус, фиксируем дату его последней выдачи
+                                    if (idCell && idCell.textContent.includes(b.id)) {
+                                        if (rowDateMs > lastActivationMs) {
+                                            lastActivationMs = rowDateMs;
+                                        }
+                                    }
                                 }
                             }
+                        });
+
+                        // Решаем, нужно ли переходить на следующую страницу:
+                        // Если самая старая дата на странице УЖЕ больше 7 дней назад, дальше искать нет смысла
+                        if (foundAnyDate && pageOldestDateMs < (nowUtcMs - sevenDaysMs)) {
+                            keepFetching = false;
+                        } else {
+                            // Ищем кнопку перехода на следующую страницу
+                            const nextBtn = doc.querySelector('a#pagination-Next');
+                            if (nextBtn) {
+                                currentUrl = nextBtn.getAttribute('href');
+                            } else {
+                                keepFetching = false; // Кнопки "Следующая" нет
+                            }
                         }
-                    });
+                    }
+                    // --- КОНЕЦ ЦИКЛА ПАГИНАЦИИ ---
 
                     return { bonus: b, lastActivationMs: lastActivationMs };
                 } catch (err) {
