@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         CheckPRO
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК, копирование ссылки
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
+// @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @grant        GM_setClipboard
