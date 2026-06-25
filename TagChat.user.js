@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         TagChat
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Мгновенный парсинг проектов
 // @author       Calvin
 // @match        https://sparkmoth.com/*
+// @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TagChat.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TagChat.user.js
 // @grant        none
