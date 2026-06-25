@@ -6,6 +6,7 @@
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
 // @match        https://sparkmoth.com/app/*
+// @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ShadowDOM.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/ShadowDOM.user.js
 // @grant        none
