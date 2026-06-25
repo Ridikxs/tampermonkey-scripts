@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ShadowDOM
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Панель с поддержкой темной темы #202024
 // @author       Calvin/River
 // @match        https://my.livechatinc.com/*
