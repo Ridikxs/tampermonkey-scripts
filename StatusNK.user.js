@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StatusNK
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.1
 // @description  Индикация загрузки статуса
 // @author       calvin
 // @match        https://backoffice-public.prod.bosx.cc/*
@@ -255,7 +255,5 @@
 
     // Проверяем страницу каждую секунду
     setInterval(run, 1000);
-
-})();
 
 })();
