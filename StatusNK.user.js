@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StatusNK
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      3.0
 // @description  Индикация загрузки статуса
 // @author       calvin
 // @match        https://backoffice-public.prod.bosx.cc/*
@@ -23,11 +23,13 @@
     const statusCache = {};
     let activeIframeClientId = null;
 
-    // Очистка строки и превращение в число
+    // Очистка строки и превращение в число с учетом копеек (десятичных дробей)
     function parseDeposit(text) {
         if (!text) return 0;
-        const cleaned = text.replace(/[^0-9]/g, '');
-        return parseInt(cleaned, 10) || 0;
+        // 1. Удаляем запятые (разделители тысяч, например в 20,404.2)
+        // 2. Удаляем всё, кроме цифр и точки
+        const cleaned = text.replace(/,/g, '').replace(/[^0-9.]/g, '');
+        return parseFloat(cleaned) || 0;
     }
 
     // Получение ID клиента из текущего URL
@@ -78,7 +80,10 @@
         let statusText = 'REGULAR';
         let bgColor = '#6c757d'; // Серый
         let textColor = '#ffffff';
-        let details = `Депозиты: ${depositSum.toLocaleString()}`;
+        
+        // Красиво форматируем сумму для вывода (с разделителями тысяч и копейками, если они есть)
+        const formattedSum = depositSum.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+        let details = `Депозиты: ${formattedSum}`;
 
         if (isVipByDeposit || hasVipTag || hasPreVipTag) {
             let reasons = [];
@@ -110,7 +115,7 @@
         const iframe = document.createElement('iframe');
         iframe.id = IFRAME_ID;
         iframe.src = `https://backoffice-public.prod.bosx.cc/clients/${clientId}/dashboard`;
-
+        
         // Делаем iframe полноценным по размеру (1000x800), чтобы Angular не тормозил загрузку,
         // но прячем его далеко за пределы экрана
         Object.assign(iframe.style, {
@@ -146,7 +151,7 @@
                 if (iframeDoc) {
                     // Пытаемся извлечь данные. Если Angular еще не подтянул цифры депозитов — вернет null
                     const data = extractClientData(iframeDoc);
-
+                    
                     if (data) {
                         clearInterval(checkInterval);
                         statusCache[clientId] = data; // Сохраняем успешный результат
@@ -218,7 +223,7 @@
             } else {
                 // Запускаем фоновую загрузку
                 loadDashboardViaIframe(clientId);
-
+                
                 // Пока идет загрузка, показываем красивый синий статус ожидания
                 const usernameEl = document.querySelector('.client__username');
                 if (usernameEl && activeIframeClientId === clientId) {
@@ -250,5 +255,7 @@
 
     // Проверяем страницу каждую секунду
     setInterval(run, 1000);
+
+})();
 
 })();
