@@ -33,5 +33,6 @@
     "SumDep.user.js": ["Fundist"],
     "МСК-Time.user.js": ["Fundist"],
     "TimeInSecondsLiveChat.user.js": ["LiveChat"] 
+    "StatusNK.user.js": ["NK"],
   }
 }
