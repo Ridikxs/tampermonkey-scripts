@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         DialogueCategories
 // @namespace    http://tampermonkey.net/
-// @version      2.2.0
+// @version      2.3.0
 // @author       calvin
 // @description  Умный подбор тегов с исключениями и быстрым ручным поиском.
 // @match        https://sparkmoth.com/*
 // @match        https://blueripple.xyz/*
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/DialogueCategories.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/DialogueCategories.user.js
 // @grant        none
 // ==/UserScript==
 
