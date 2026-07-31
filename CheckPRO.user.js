@@ -1,15 +1,14 @@
 // ==UserScript==
 // @name         CheckPRO
 // @namespace    http://tampermonkey.net/
-// @version      2.3
-// @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК, копирование прямой ссылки
+// @version      2.4
+// @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК/
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @grant        GM_setClipboard
-// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
@@ -21,6 +20,7 @@
         downloadLinks.forEach(link => {
             if (link.textContent.trim() === 'Скачать' || link.classList.contains('bg-n-solid-3')) {
 
+                // Функция всегда берет актуальный URL из кнопки на момент клика
                 const getActualUrl = () => link.href.split('#')[0];
 
                 const fileContainer = link.closest('.grid.gap-4');
@@ -81,53 +81,30 @@
                     e.preventDefault();
                     e.stopPropagation();
 
+                    // Берем оригинальную ссылку с /rails/active_storage/blobs/redirect/...
                     const currentUrl = getActualUrl();
                     const originalText = copyBtn.textContent;
 
-                    copyBtn.textContent = 'Получение прямой ссылки...';
-                    copyBtn.style.backgroundColor = '#fbbf24'; // Индикатор загрузки
-                    copyBtn.style.color = '#000000';
-
-                    const executeCopy = (textToCopy) => {
-                        const showSuccess = () => {
-                            copyBtn.textContent = 'Скопировано!';
-                            copyBtn.style.backgroundColor = '#4ade80';
-                            copyBtn.style.color = '#000000';
-                            setTimeout(() => {
-                                copyBtn.textContent = originalText;
-                                copyBtn.style.backgroundColor = '#202024';
-                                copyBtn.style.color = '#ffffff';
-                            }, 1500);
-                        };
-
-                        if (navigator.clipboard && navigator.clipboard.writeText) {
-                            navigator.clipboard.writeText(textToCopy).then(showSuccess).catch(() => {
-                                GM_setClipboard(textToCopy);
-                                showSuccess();
-                            });
-                        } else {
-                            GM_setClipboard(textToCopy);
-                            showSuccess();
-                        }
+                    const showSuccess = () => {
+                        copyBtn.textContent = 'Скопировано!';
+                        copyBtn.style.backgroundColor = '#4ade80';
+                        copyBtn.style.color = '#000000';
+                        setTimeout(() => {
+                            copyBtn.textContent = originalText;
+                            copyBtn.style.backgroundColor = '#202024';
+                            copyBtn.style.color = '#ffffff';
+                        }, 1500);
                     };
 
-                    // Делаем фоновый запрос для получения финального S3 URL после всех редиректов
-                    GM_xmlhttpRequest({
-                        method: 'GET',
-                        url: currentUrl,
-                        headers: {
-                            "Range": "bytes=0-0" // Чтобы не качать весь PDF, берем только первый байт
-                        },
-                        onload: function(response) {
-                            // response.finalUrl содержит нужную нам прямую ссылку на хранилище
-                            const finalUrl = response.finalUrl || currentUrl;
-                            executeCopy(finalUrl);
-                        },
-                        onerror: function() {
-                            // Фоллбэк: если сеть отвалилась, копируем дефолтную ссылку
-                            executeCopy(currentUrl);
-                        }
-                    });
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(currentUrl).then(showSuccess).catch(() => {
+                            GM_setClipboard(currentUrl);
+                            showSuccess();
+                        });
+                    } else {
+                        GM_setClipboard(currentUrl);
+                        showSuccess();
+                    }
                 });
 
                 // --- Кнопка "Предпросмотр чека" ---
