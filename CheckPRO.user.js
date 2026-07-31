@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         CheckPRO
 // @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК, копирование ссылки
+// @version      2.3
+// @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК, копирование прямой ссылки
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @match        https://blueripple.xyz/*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/CheckPRO.user.js
 // @grant        GM_setClipboard
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
@@ -20,12 +21,10 @@
         downloadLinks.forEach(link => {
             if (link.textContent.trim() === 'Скачать' || link.classList.contains('bg-n-solid-3')) {
 
-                // ФИКС: Создаем функцию, которая всегда берет самую свежую ссылку в момент клика
                 const getActualUrl = () => link.href.split('#')[0];
 
                 const fileContainer = link.closest('.grid.gap-4');
 
-                // Проверяем, что это PDF (используем изначальный href для проверки)
                 const isPdfUrl = link.href.toLowerCase().includes('.pdf');
                 let isPdfDom = false;
 
@@ -55,7 +54,7 @@
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    window.open(getActualUrl(), '_blank'); // Используем свежую ссылку
+                    window.open(getActualUrl(), '_blank');
                 });
 
                 const btnStyle = `
@@ -82,23 +81,52 @@
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const currentUrl = getActualUrl(); // Берем свежую ссылку перед копированием
+                    const currentUrl = getActualUrl();
+                    const originalText = copyBtn.textContent;
 
-                    const showSuccess = () => {
-                        const originalText = copyBtn.textContent;
-                        copyBtn.textContent = 'Скопировано!';
-                        copyBtn.style.backgroundColor = '#4ade80';
-                        copyBtn.style.color = '#000000';
-                        setTimeout(() => {
-                            copyBtn.textContent = originalText;
-                            copyBtn.style.backgroundColor = '#202024';
-                            copyBtn.style.color = '#ffffff';
-                        }, 1500);
+                    copyBtn.textContent = 'Получение прямой ссылки...';
+                    copyBtn.style.backgroundColor = '#fbbf24'; // Индикатор загрузки
+                    copyBtn.style.color = '#000000';
+
+                    const executeCopy = (textToCopy) => {
+                        const showSuccess = () => {
+                            copyBtn.textContent = 'Скопировано!';
+                            copyBtn.style.backgroundColor = '#4ade80';
+                            copyBtn.style.color = '#000000';
+                            setTimeout(() => {
+                                copyBtn.textContent = originalText;
+                                copyBtn.style.backgroundColor = '#202024';
+                                copyBtn.style.color = '#ffffff';
+                            }, 1500);
+                        };
+
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(textToCopy).then(showSuccess).catch(() => {
+                                GM_setClipboard(textToCopy);
+                                showSuccess();
+                            });
+                        } else {
+                            GM_setClipboard(textToCopy);
+                            showSuccess();
+                        }
                     };
 
-                    navigator.clipboard.writeText(currentUrl).then(showSuccess).catch(() => {
-                        GM_setClipboard(currentUrl);
-                        showSuccess();
+                    // Делаем фоновый запрос для получения финального S3 URL после всех редиректов
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: currentUrl,
+                        headers: {
+                            "Range": "bytes=0-0" // Чтобы не качать весь PDF, берем только первый байт
+                        },
+                        onload: function(response) {
+                            // response.finalUrl содержит нужную нам прямую ссылку на хранилище
+                            const finalUrl = response.finalUrl || currentUrl;
+                            executeCopy(finalUrl);
+                        },
+                        onerror: function() {
+                            // Фоллбэк: если сеть отвалилась, копируем дефолтную ссылку
+                            executeCopy(currentUrl);
+                        }
                     });
                 });
 
@@ -109,13 +137,13 @@
 
                 let previewContainer = null;
                 let isPseudoFullscreen = false;
-                let iframe = null; // Выносим iframe в область видимости
+                let iframe = null;
 
                 previewBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const currentUrl = getActualUrl(); // Берем свежую ссылку для предпросмотра
+                    const currentUrl = getActualUrl();
 
                     if (!previewContainer) {
                         previewContainer = document.createElement('div');
@@ -128,7 +156,6 @@
                         previewContainer.style.display = 'flex';
                         previewContainer.style.flexDirection = 'column';
 
-                        // Панель инструментов
                         const toolbar = document.createElement('div');
                         toolbar.style.display = 'flex';
                         toolbar.style.justifyContent = 'space-between';
@@ -137,7 +164,6 @@
                         toolbar.style.backgroundColor = '#202024';
                         toolbar.style.borderBottom = '1px solid #3f3f46';
 
-                        // Левый блок (Часы МСК)
                         const timeDisplay = document.createElement('div');
                         timeDisplay.style.color = '#a1a1aa';
                         timeDisplay.style.fontSize = '14px';
@@ -155,7 +181,6 @@
                         updateClock();
                         setInterval(updateClock, 1000);
 
-                        // Центральный блок (Качественный Зум)
                         const zoomControls = document.createElement('div');
                         zoomControls.style.display = 'flex';
                         zoomControls.style.alignItems = 'center';
@@ -196,7 +221,6 @@
                         iframe.style.border = 'none';
                         iframe.style.backgroundColor = '#ffffff';
 
-                        // Обновляем зум, используя всегда актуальную ссылку
                         const updateZoom = () => {
                             zoomLabel.textContent = `${currentZoom}%`;
                             iframe.src = `${getActualUrl()}#zoom=${currentZoom}`;
@@ -209,20 +233,17 @@
                         zoomControls.appendChild(zoomLabel);
                         zoomControls.appendChild(zoomInBtn);
 
-                        // Правый блок (На весь экран)
                         const fullscreenBtn = document.createElement('button');
                         fullscreenBtn.textContent = '⛶ На весь экран';
                         fullscreenBtn.style.cssText = btnCtrlStyle;
                         fullscreenBtn.style.fontSize = '13px';
 
-                        // Обертка для iframe
                         const iframeWrapper = document.createElement('div');
                         iframeWrapper.style.width = '100%';
                         iframeWrapper.style.height = '450px';
                         iframeWrapper.style.resize = 'vertical';
                         iframeWrapper.style.overflow = 'hidden';
 
-                        // Логика фулскрина
                         fullscreenBtn.onclick = (ev) => {
                             ev.preventDefault();
                             isPseudoFullscreen = !isPseudoFullscreen;
@@ -264,7 +285,6 @@
                         previewBtn.textContent = 'Скрыть предпросмотр';
                     } else {
                         if (previewContainer.style.display === 'none') {
-                            // Если предпросмотр был скрыт, перед показом обновляем источник, вдруг токен сменился
                             iframe.src = `${getActualUrl()}#zoom=${100}`;
                             previewContainer.style.display = 'flex';
                             previewBtn.textContent = 'Скрыть предпросмотр';
@@ -294,10 +314,6 @@
             processDocumentBlocks();
         }
     });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-    processDocumentBlocks();
-})();
 
     observer.observe(document.body, { childList: true, subtree: true });
     processDocumentBlocks();
