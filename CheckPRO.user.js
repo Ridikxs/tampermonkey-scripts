@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CheckPRO
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Предпросмотр PDF с зумом, полноэкранный режим, часы МСК, копирование ссылки
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -20,11 +20,13 @@
         downloadLinks.forEach(link => {
             if (link.textContent.trim() === 'Скачать' || link.classList.contains('bg-n-solid-3')) {
 
-                const url = link.href.split('#')[0]; // Очищаем URL от старых параметров
+                // ФИКС: Создаем функцию, которая всегда берет самую свежую ссылку в момент клика
+                const getActualUrl = () => link.href.split('#')[0];
+
                 const fileContainer = link.closest('.grid.gap-4');
 
-                // Проверяем, что это PDF
-                const isPdfUrl = url.toLowerCase().includes('.pdf');
+                // Проверяем, что это PDF (используем изначальный href для проверки)
+                const isPdfUrl = link.href.toLowerCase().includes('.pdf');
                 let isPdfDom = false;
 
                 if (fileContainer) {
@@ -53,7 +55,7 @@
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    window.open(url, '_blank');
+                    window.open(getActualUrl(), '_blank'); // Используем свежую ссылку
                 });
 
                 const btnStyle = `
@@ -79,6 +81,9 @@
                 copyBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
+
+                    const currentUrl = getActualUrl(); // Берем свежую ссылку перед копированием
+
                     const showSuccess = () => {
                         const originalText = copyBtn.textContent;
                         copyBtn.textContent = 'Скопировано!';
@@ -91,8 +96,8 @@
                         }, 1500);
                     };
 
-                    navigator.clipboard.writeText(url).then(showSuccess).catch(() => {
-                        GM_setClipboard(url);
+                    navigator.clipboard.writeText(currentUrl).then(showSuccess).catch(() => {
+                        GM_setClipboard(currentUrl);
                         showSuccess();
                     });
                 });
@@ -104,10 +109,13 @@
 
                 let previewContainer = null;
                 let isPseudoFullscreen = false;
+                let iframe = null; // Выносим iframe в область видимости
 
                 previewBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
+
+                    const currentUrl = getActualUrl(); // Берем свежую ссылку для предпросмотра
 
                     if (!previewContainer) {
                         previewContainer = document.createElement('div');
@@ -153,7 +161,7 @@
                         zoomControls.style.alignItems = 'center';
                         zoomControls.style.gap = '8px';
 
-                        let currentZoom = 100; // Стартовый зум в процентах
+                        let currentZoom = 100;
 
                         const btnCtrlStyle = `
                             background-color: #3f3f46;
@@ -181,17 +189,17 @@
                         zoomInBtn.textContent = '➕';
                         zoomInBtn.style.cssText = btnCtrlStyle;
 
-                        const iframe = document.createElement('iframe');
-                        iframe.src = `${url}#zoom=${currentZoom}`;
+                        iframe = document.createElement('iframe');
+                        iframe.src = `${currentUrl}#zoom=${currentZoom}`;
                         iframe.style.width = '100%';
                         iframe.style.height = '100%';
                         iframe.style.border = 'none';
                         iframe.style.backgroundColor = '#ffffff';
 
-                        // Функция зума через URL-параметр (сохраняет векторное качество PDF)
+                        // Обновляем зум, используя всегда актуальную ссылку
                         const updateZoom = () => {
                             zoomLabel.textContent = `${currentZoom}%`;
-                            iframe.src = `${url}#zoom=${currentZoom}`;
+                            iframe.src = `${getActualUrl()}#zoom=${currentZoom}`;
                         };
 
                         zoomInBtn.onclick = (ev) => { ev.preventDefault(); currentZoom += 25; updateZoom(); };
@@ -256,6 +264,8 @@
                         previewBtn.textContent = 'Скрыть предпросмотр';
                     } else {
                         if (previewContainer.style.display === 'none') {
+                            // Если предпросмотр был скрыт, перед показом обновляем источник, вдруг токен сменился
+                            iframe.src = `${getActualUrl()}#zoom=${100}`;
                             previewContainer.style.display = 'flex';
                             previewBtn.textContent = 'Скрыть предпросмотр';
                         } else {
@@ -284,6 +294,10 @@
             processDocumentBlocks();
         }
     });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    processDocumentBlocks();
+})();
 
     observer.observe(document.body, { childList: true, subtree: true });
     processDocumentBlocks();
