@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagChat
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Мгновенный парсинг проектов
 // @author       Calvin
 // @match        https://sparkmoth.com/*
@@ -78,38 +78,34 @@
 
         chatItems.forEach(chat => {
             const nameEl = chat.querySelector('.conversation--user');
-            if (!nameEl) return; // Безопасный пропуск, если блок еще не прогрузился
+            if (!nameEl) return;
             
             const chatName = nameEl.textContent.trim();
             const cached = dataCache.get(chatName) || { tags: [], project: null, status: null };
 
-            // Безопасный поиск контейнера с названием проекта (Gama Regular и т.д.)
             const titleContainer = nameEl.previousElementSibling;
             if (!titleContainer) return;
             
             const sourceContainer = titleContainer.querySelector('[title]');
             if (!sourceContainer) return;
 
-            const iconWrapper = sourceContainer.querySelector('.text-n-slate-11.flex-shrink-0, .i-woot-website, .i-woot-telegram')?.parentElement;
-            const truncateEl = sourceContainer.querySelector('.truncate');
+            // ИСПРАВЛЕНИЕ ЗДЕСЬ: Точечно прячем старый текст и иконки, не убивая родительский блок
+            const originalElements = sourceContainer.querySelectorAll('.inline-flex, .truncate');
+            originalElements.forEach(el => {
+                if (el.style.display !== 'none') el.style.display = 'none';
+            });
 
             let dProj = cached.project;
             let dStat = cached.status;
 
-            // Вытягиваем проект прямо из верстки сайта
             if (!dProj) {
-                const fullText = sourceContainer.getAttribute('title') || (truncateEl ? truncateEl.textContent.trim() : '');
+                const fullText = sourceContainer.getAttribute('title') || '';
                 if (fullText) {
-                    // Регулярка теперь распознает TG и Regular отдельно
                     const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|TG|.*_V2))?$/i);
                     dProj = match ? match[1].trim() : fullText;
                     dStat = match && match[2] ? match[2].toUpperCase() : null;
                 }
             }
-
-            // Прячем старые иконки и текст
-            if (iconWrapper && iconWrapper.style.display !== 'none') iconWrapper.style.display = 'none';
-            if (truncateEl && truncateEl.style.display !== 'none') truncateEl.style.display = 'none';
 
             let badgeWrapper = sourceContainer.querySelector('.custom-badges-wrapper');
             if (!badgeWrapper) {
@@ -147,7 +143,6 @@
         });
     }
 
-    // Observer с задержкой, чтобы не вешать страницу при быстрых изменениях
     let observerTimeout = null;
     const observer = new MutationObserver(() => {
         if (observerTimeout) clearTimeout(observerTimeout);
@@ -169,13 +164,11 @@
             }
             hideUnwantedAttributes();
             render();
-        }, 300);
+        }, 200);
     });
 
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-    // Фолбек: Принудительно запускаем рендер каждые 2 секунды. 
-    // Это гарантирует, что бейджи прогрузятся даже если Observer пропустит загрузку страницы.
     setInterval(() => {
         render();
         hideUnwantedAttributes();
