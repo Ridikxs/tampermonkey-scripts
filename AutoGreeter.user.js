@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AutoGreeter
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Авто приветствие.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
@@ -19,12 +19,12 @@
     // 1. СИСТЕМА НАСТРОЕК (LOCAL STORAGE)
     // ==========================================
     const CONFIG_KEY = 'autoGreeterConfig_v1';
-
+    
     const defaultConfig = {
         delay: 15,
         greetings: {
-            "sparkmoth.com": "Напиши тут...",
-            "blueripple.xyz": "Напиши тут..."
+            "sparkmoth.com": "Меня зовут Кэлвин, сегодня я ваш оператор.",
+            "blueripple.xyz": "Меня зовут Иван, сегодня я ваш оператор."
         }
     };
 
@@ -35,19 +35,19 @@
     }
 
     const domain = window.location.hostname;
-
+    
     let greetingText = config.greetings[domain] || "";
     let autoGreetDelay = config.delay * 1000;
 
     let isProcessing = false;
-    const processedUsers = new Set();
+    
+    // Глобальные списки теперь хранят уникальные слепки чатов (chatKey), а не просто имена
+    const processedChats = new Set(); 
     const autoTimers = new Map();
 
     // ==========================================
     // 2. ИНТЕРФЕЙС НАСТРОЕК (GUI)
     // ==========================================
-
-    // Красивое всплывающее уведомление вместо alert
     function showToast(message) {
         const toast = document.createElement('div');
         toast.innerText = message;
@@ -61,30 +61,28 @@
         `;
         document.body.appendChild(toast);
 
-        // Анимация появления
         setTimeout(() => {
             toast.style.opacity = '1';
             toast.style.transform = 'translateY(0)';
         }, 10);
 
-        // Анимация исчезновения через 2 секунды
         setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(10px)';
-            setTimeout(() => toast.remove(), 300); // Ждем конца CSS-анимации перед удалением из DOM
+            setTimeout(() => toast.remove(), 300);
         }, 2000);
     }
 
     function saveConfig(newDelay, newSparkmothText, newBluerippleText) {
-        config.delay = Math.max(1, Math.min(30, parseInt(newDelay) || 15));
+        config.delay = Math.max(1, Math.min(30, parseInt(newDelay) || 15)); 
         config.greetings["sparkmoth.com"] = newSparkmothText;
         config.greetings["blueripple.xyz"] = newBluerippleText;
-
+        
         localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-
+        
         greetingText = config.greetings[domain] || "";
         autoGreetDelay = config.delay * 1000;
-
+        
         closeSettingsModal();
         showToast('✅ Настройки успешно сохранены!');
     }
@@ -101,7 +99,6 @@
         `;
 
         const modalBox = document.createElement('div');
-        // Форсированная темная тема
         modalBox.style.cssText = `
             background: #1e293b; width: 400px; border-radius: 12px; padding: 24px;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); font-family: sans-serif;
@@ -111,21 +108,21 @@
 
         modalBox.innerHTML = `
             <h2 style="margin: 0; font-size: 18px; font-weight: bold; border-bottom: 1px solid #334155; padding-bottom: 12px;">⚙️ Настройки бота</h2>
-
+            
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Задержка авто-отправки (сек):</label>
-                <input type="number" id="ag-delay-input" min="1" max="30" value="${config.delay}"
+                <input type="number" id="ag-delay-input" min="1" max="30" value="${config.delay}" 
                     style="padding: 8px; border: 1px solid #475569; border-radius: 6px; font-size: 14px; background: #0f172a; color: #f8fafc; outline: none;">
                 <span style="font-size: 11px; color: #94a3b8;">Укажите значение от 1 до 30 секунд.</span>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Приветствие для SG:</label>
+                <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Приветствие для sparkmoth.com:</label>
                 <textarea id="ag-sparkmoth-input" rows="3" style="padding: 8px; border: 1px solid #475569; border-radius: 6px; font-size: 14px; resize: none; background: #0f172a; color: #f8fafc; outline: none;">${config.greetings["sparkmoth.com"]}</textarea>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 4px;">
-                <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Приветствие для NC:</label>
+                <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Приветствие для blueripple.xyz:</label>
                 <textarea id="ag-blueripple-input" rows="3" style="padding: 8px; border: 1px solid #475569; border-radius: 6px; font-size: 14px; resize: none; background: #0f172a; color: #f8fafc; outline: none;">${config.greetings["blueripple.xyz"]}</textarea>
             </div>
 
@@ -138,13 +135,11 @@
         modalOverlay.appendChild(modalBox);
         document.body.appendChild(modalOverlay);
 
-        // Эффекты наведения для кнопок
         const cancelBtn = document.getElementById('ag-cancel-btn');
         const saveBtn = document.getElementById('ag-save-btn');
-
+        
         cancelBtn.onmouseover = () => cancelBtn.style.background = '#475569';
         cancelBtn.onmouseout = () => cancelBtn.style.background = '#334155';
-
         saveBtn.onmouseover = () => saveBtn.style.background = '#059669';
         saveBtn.onmouseout = () => saveBtn.style.background = '#10b981';
 
@@ -176,13 +171,13 @@
         const btn = document.createElement('button');
         btn.innerHTML = '🤖 Настроить бота';
         btn.style.cssText = `
-            width: 100%; padding: 6px 12px; background: rgba(16, 185, 129, 0.1);
-            color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);
-            border-radius: 8px; font-size: 13px; font-weight: 600;
+            width: 100%; padding: 6px 12px; background: rgba(16, 185, 129, 0.1); 
+            color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); 
+            border-radius: 8px; font-size: 13px; font-weight: 600; 
             cursor: pointer; transition: all 0.2s ease;
             display: flex; align-items: center; justify-content: center; gap: 6px;
         `;
-
+        
         btn.onmouseover = () => {
             btn.style.background = 'rgba(16, 185, 129, 0.2)';
             btn.style.borderColor = 'rgba(16, 185, 129, 0.5)';
@@ -202,7 +197,7 @@
     // ==========================================
     function isAlreadyGreeted() {
         const messages = document.querySelectorAll('.message-bubble-container .prose-bubble p');
-        const sparkText = config.greetings["sparkmoth.com"].trim().split(',')[0];
+        const sparkText = config.greetings["sparkmoth.com"].trim().split(',')[0]; 
         const blueText = config.greetings["blueripple.xyz"].trim().split(',')[0];
 
         for (let msg of messages) {
@@ -214,11 +209,11 @@
         return false;
     }
 
-    function markAsDoneAndHide(userName, wrapper, greetBtn) {
-        processedUsers.add(userName);
+    function markAsDoneAndHide(chatKey, wrapper, greetBtn) {
+        processedChats.add(chatKey); 
 
-        if (autoTimers.has(userName)) {
-            autoTimers.delete(userName);
+        if (autoTimers.has(chatKey)) {
+            autoTimers.delete(chatKey);
         }
 
         if (!wrapper) {
@@ -230,7 +225,7 @@
             greetBtn.innerHTML = '✅';
             greetBtn.style.background = 'rgb(100, 116, 139)';
         }
-
+        
         const dismissBtn = wrapper.querySelector('.dismiss-btn');
         if (dismissBtn) dismissBtn.style.display = 'none';
 
@@ -243,7 +238,7 @@
         }, 800);
     }
 
-    function processGreeting(conv, userName, wrapper, greetBtn) {
+    function processGreeting(conv, chatKey, wrapper, greetBtn) {
         if (!greetingText) {
             console.warn("Приветствие не настроено для этого домена!");
             return;
@@ -251,7 +246,7 @@
 
         if (isProcessing) return;
         isProcessing = true;
-
+        
         const originalBtnText = greetBtn ? greetBtn.innerHTML : '👋';
         if (greetBtn) {
             greetBtn.innerHTML = '⏳';
@@ -261,35 +256,35 @@
         conv.click();
 
         let checkCount = 0;
-
+        
         const checkInterval = setInterval(() => {
             checkCount++;
-
+            
             const editor = document.querySelector('.ProseMirror');
             const sendButton = document.querySelector('button[type="submit"]');
-
+            
             if (editor && sendButton && conv.classList.contains('active')) {
                 clearInterval(checkInterval);
-
+                
                 setTimeout(() => {
                     if (isAlreadyGreeted()) {
-                        markAsDoneAndHide(userName, wrapper, greetBtn);
+                        markAsDoneAndHide(chatKey, wrapper, greetBtn);
                         return;
                     }
 
                     editor.focus();
                     document.execCommand('insertText', false, greetingText);
                     editor.dispatchEvent(new Event('input', { bubbles: true }));
-
+                    
                     setTimeout(() => {
                         sendButton.disabled = false;
                         sendButton.click();
-                        markAsDoneAndHide(userName, wrapper, greetBtn);
+                        markAsDoneAndHide(chatKey, wrapper, greetBtn);
                     }, 150);
 
                 }, 500);
-
-            } else if (checkCount > 30) {
+                
+            } else if (checkCount > 30) { 
                 clearInterval(checkInterval);
                 if (greetBtn) {
                     greetBtn.innerHTML = '❌';
@@ -311,31 +306,39 @@
 
         const conversations = document.querySelectorAll('div.conversation');
         const now = Date.now();
-
+        
         conversations.forEach(conv => {
             const nameEl = conv.querySelector('.conversation--user');
             if (!nameEl) return;
-
+            
+            // 1. Создаем уникальный слепок чата (Имя + Инициалы + Цвет аватарки)
             const userName = nameEl.childNodes[0] ? nameEl.childNodes[0].textContent.trim() : nameEl.innerText.trim();
+            const avatarEl = conv.querySelector('[role="img"]');
+            const avatarColor = avatarEl ? avatarEl.style.backgroundColor : 'no-color';
+            const initialsEl = conv.querySelector('.select-none');
+            const initials = initialsEl ? initialsEl.innerText.trim() : 'no-initials';
+            
+            const chatKey = `${userName}_${initials}_${avatarColor}`;
+
             let wrapper = conv.querySelector('.quick-greet-wrapper');
 
             const isClosed = conv.closest('.resolved-in-open') || (nameEl.innerText && nameEl.innerText.toLowerCase().includes('закрыт'));
-
+            
             if (isClosed) {
-                if (autoTimers.has(userName)) autoTimers.delete(userName);
-                if (wrapper) wrapper.remove();
-                return;
+                if (autoTimers.has(chatKey)) autoTimers.delete(chatKey); 
+                if (wrapper) wrapper.remove(); 
+                return; 
             }
 
-            if (processedUsers.has(userName)) {
+            if (processedChats.has(chatKey)) {
                 if (wrapper) wrapper.remove();
-                if (autoTimers.has(userName)) autoTimers.delete(userName);
-                return;
+                if (autoTimers.has(chatKey)) autoTimers.delete(chatKey);
+                return; 
             }
 
-            if (wrapper && wrapper.getAttribute('data-target-user') !== userName) {
-                wrapper.remove();
-                wrapper = null;
+            if (wrapper && wrapper.getAttribute('data-target-chat') !== chatKey) {
+                wrapper.remove(); 
+                wrapper = null; 
             }
 
             let greetBtn = wrapper ? wrapper.querySelector('.action-greet-btn') : null;
@@ -343,14 +346,14 @@
             if (!wrapper) {
                 wrapper = document.createElement('div');
                 wrapper.className = 'quick-greet-wrapper';
-                wrapper.setAttribute('data-target-user', userName);
+                wrapper.setAttribute('data-target-chat', chatKey);
                 wrapper.style.cssText = `
                     position: absolute; bottom: 12px; right: 12px; z-index: 50;
                     display: flex; gap: 4px; align-items: center; transition: opacity 0.3s ease;
                 `;
 
                 greetBtn = document.createElement('button');
-                greetBtn.className = 'action-greet-btn';
+                greetBtn.className = 'action-greet-btn'; 
                 greetBtn.innerHTML = '👋';
                 greetBtn.title = 'Поздороваться автоматически';
                 greetBtn.style.cssText = `
@@ -376,7 +379,7 @@
                 greetBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    processGreeting(conv, userName, wrapper, greetBtn);
+                    processGreeting(conv, chatKey, wrapper, greetBtn);
                 });
 
                 const dismissBtn = document.createElement('button');
@@ -403,25 +406,25 @@
                 dismissBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    markAsDoneAndHide(userName, wrapper, null);
+                    markAsDoneAndHide(chatKey, wrapper, null); 
                 });
 
                 wrapper.appendChild(dismissBtn);
                 wrapper.appendChild(greetBtn);
                 conv.appendChild(wrapper);
 
-                autoTimers.set(userName, now);
+                autoTimers.set(chatKey, now);
             }
 
-            if (autoTimers.has(userName)) {
-                const spawnTime = autoTimers.get(userName);
+            if (autoTimers.has(chatKey)) {
+                const spawnTime = autoTimers.get(chatKey);
                 const timePassed = now - spawnTime;
 
                 if (timePassed >= autoGreetDelay) {
-                    if (isProcessing) return;
-                    autoTimers.delete(userName);
+                    if (isProcessing) return; 
+                    autoTimers.delete(chatKey); 
                     if (wrapper && greetBtn) {
-                        processGreeting(conv, userName, wrapper, greetBtn);
+                        processGreeting(conv, chatKey, wrapper, greetBtn);
                     }
                 }
             }
