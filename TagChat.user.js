@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagChat
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Мгновенный парсинг проектов
 // @author       Calvin
 // @match        https://sparkmoth.com/*
@@ -55,9 +55,10 @@
             }
         }
 
+        // Фикс для коллег: добавлено условие Inbox/Источник на случай другого языка интерфейса
         const wrapElements = document.querySelectorAll('.multiselect-wrap--small');
         for (let wrap of wrapElements) {
-            if (wrap.textContent.includes('Назначенный источник')) {
+            if (wrap.textContent.includes('Назначенный источник') || wrap.textContent.includes('Inbox') || wrap.textContent.includes('Источник')) {
                 const h4 = wrap.querySelector('button h4[title]');
                 if (h4) {
                     const fullText = h4.getAttribute('title').trim();
@@ -91,21 +92,11 @@
         const t = tagText.toLowerCase();
         const baseSt = "padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; border: 1px solid;";
 
-        if (t.includes('duplicate')) {
-            return `${baseSt} background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;`;
-        }
-        if (t.includes('reactivation')) {
-            return `${baseSt} background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7;`;
-        }
-        if (t.includes('highroll')) {
-            return `${baseSt} background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fda4af;`;
-        }
-        if (/^(vip|privip|previp)$/.test(t)) {
-            return `${baseSt} background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d;`;
-        }
-        if (t.includes('_v2')) {
-            return `${baseSt} background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.4); color: #d8b4fe;`;
-        }
+        if (t.includes('duplicate')) return `${baseSt} background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;`;
+        if (t.includes('reactivation')) return `${baseSt} background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7;`;
+        if (t.includes('highroll')) return `${baseSt} background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fda4af;`;
+        if (/^(vip|privip|previp)$/.test(t)) return `${baseSt} background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d;`;
+        if (t.includes('_v2')) return `${baseSt} background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.4); color: #d8b4fe;`;
 
         return `${baseSt} background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1;`;
     }
@@ -120,32 +111,33 @@
         chatItems.forEach(chat => {
             const nameEl = chat.querySelector('.conversation--user');
             if (!nameEl) return;
+            
             const chatName = nameEl.textContent.trim();
             const cached = dataCache.get(chatName) || { tags: [], project: null, status: null };
 
-            const sourceContainer = chat.querySelector('.flex-1.min-w-0[title], .flex-1.min-w-0');
+            // ФИКС ВЕРСТКИ: Точечный поиск нужного контейнера, а не общего родителя
+            const truncateEl = chat.querySelector('.truncate.text-label-small');
+            if (!truncateEl) return;
+            
+            const sourceContainer = truncateEl.closest('.flex-1.min-w-0');
             if (!sourceContainer) return;
-
-            const iconEl = sourceContainer.querySelector('.relative.inline-flex') || sourceContainer.querySelector('span[class^="i-"]');
-            const truncateEl = sourceContainer.querySelector('.truncate');
 
             let dProj = cached.project;
             let dStat = cached.status;
 
-            if (!dProj && sourceContainer.hasAttribute('title')) {
-                const fullText = sourceContainer.getAttribute('title').trim();
-                const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
-                dProj = match ? match[1].trim() : fullText;
-                dStat = match && match[2] ? match[2].toUpperCase() : null;
-            } else if (!dProj && truncateEl && truncateEl.textContent.trim()) {
-                const fullText = truncateEl.textContent.trim();
-                const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
-                dProj = match ? match[1].trim() : fullText;
-                dStat = match && match[2] ? match[2].toUpperCase() : null;
+            if (!dProj) {
+                const fullText = sourceContainer.getAttribute('title') || truncateEl.textContent.trim();
+                if (fullText) {
+                    const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
+                    dProj = match ? match[1].trim() : fullText;
+                    dStat = match && match[2] ? match[2].toUpperCase() : null;
+                }
             }
 
-            if (iconEl) iconEl.style.display = 'none';
-            if (truncateEl) truncateEl.style.display = 'none';
+            // Прячем стандартную иконку (tg/веб) и старый текст
+            const iconWrapper = sourceContainer.querySelector('.inline-flex.flex-shrink-0');
+            if (iconWrapper) iconWrapper.style.display = 'none';
+            truncateEl.style.display = 'none';
 
             let badgeWrapper = sourceContainer.querySelector('.custom-badges-wrapper');
             if (!badgeWrapper) {
@@ -180,27 +172,29 @@
             if (badgeWrapper.innerHTML !== html) {
                 badgeWrapper.innerHTML = html;
             }
-
-            const oldTags = chat.querySelector('.custom-user-tags');
-            if (oldTags) oldTags.remove();
         });
     }
 
+    // ФИКС ПРОИЗВОДИТЕЛЬНОСТИ: Оптимизация (Debounce) для слабых ПК коллег
+    let observerTimeout = null;
     const observer = new MutationObserver(() => {
-        const activeName = getActiveChatName();
-        if (activeName) {
-            const extracted = extractData();
-            const existing = dataCache.get(activeName) || { tags: [], project: null, status: null };
+        if (observerTimeout) clearTimeout(observerTimeout);
+        observerTimeout = setTimeout(() => {
+            const activeName = getActiveChatName();
+            if (activeName) {
+                const extracted = extractData();
+                const existing = dataCache.get(activeName) || { tags: [], project: null, status: null };
 
-            dataCache.set(activeName, {
-                tags: extracted.tags.length > 0 ? extracted.tags : existing.tags,
-                project: extracted.project || existing.project,
-                status: extracted.status || existing.status
-            });
-        }
+                dataCache.set(activeName, {
+                    tags: extracted.tags.length > 0 ? extracted.tags : existing.tags,
+                    project: extracted.project || existing.project,
+                    status: extracted.status || existing.status
+                });
+            }
 
-        hideUnwantedAttributes();
-        render();
+            hideUnwantedAttributes();
+            render();
+        }, 150); // Ждем 150мс после изменений DOM, чтобы не вешать браузер
     });
 
     observer.observe(document.body, {
@@ -209,6 +203,7 @@
         characterData: true
     });
 
+})();
 })();
 
 })();
