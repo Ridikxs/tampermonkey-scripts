@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TagChat
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Мгновенный парсинг проектов
 // @author       Calvin
 // @match        https://sparkmoth.com/*
@@ -16,21 +16,11 @@
 
     const TARGET_TAGS_REGEX = /^(VIP|PRIVIP|PREVIP|.*_V2|Duplicate - Phone|Reactivation|Highroll)$/i;
     const dataCache = new Map();
-
     const ATTR_TO_HIDE = [
         'project', 'language', 'usertime', 'usertag', 'loyaltylevel',
         'lastdepositdate', 'devicetype', 'duplicatelevel', 'validationlevel',
         'dateofbirth', 'depositamount', 'channel type'
     ];
-
-    function getActiveChatName() {
-        const activeChat = document.querySelector('.conversation.active');
-        if (activeChat) {
-            const nameEl = activeChat.querySelector('.conversation--user');
-            if (nameEl) return nameEl.textContent.trim();
-        }
-        return null;
-    }
 
     function extractData() {
         let tags = [];
@@ -54,22 +44,6 @@
                 } catch (e) {}
             }
         }
-
-        // Фикс для коллег: добавлено условие Inbox/Источник на случай другого языка интерфейса
-        const wrapElements = document.querySelectorAll('.multiselect-wrap--small');
-        for (let wrap of wrapElements) {
-            if (wrap.textContent.includes('Назначенный источник') || wrap.textContent.includes('Inbox') || wrap.textContent.includes('Источник')) {
-                const h4 = wrap.querySelector('button h4[title]');
-                if (h4) {
-                    const fullText = h4.getAttribute('title').trim();
-                    const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
-                    project = match ? match[1].trim() : fullText;
-                    status = match && match[2] ? match[2].toUpperCase() : null;
-                }
-                break;
-            }
-        }
-
         return { tags, project, status };
     }
 
@@ -77,9 +51,7 @@
         const attributeSpans = document.querySelectorAll('.px-4.py-3 h4 span.text-n-slate-12');
         attributeSpans.forEach(span => {
             const name = span.textContent.trim().toLowerCase();
-            const shouldHide = ATTR_TO_HIDE.some(attr => name.startsWith(attr));
-
-            if (shouldHide) {
+            if (ATTR_TO_HIDE.some(attr => name.startsWith(attr))) {
                 const containerRow = span.closest('.drag-handle');
                 if (containerRow && containerRow.style.display !== 'none') {
                     containerRow.style.display = 'none';
@@ -101,43 +73,43 @@
         return `${baseSt} background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1;`;
     }
 
-    function isVipEquivalent(tagText) {
-        return /^(vip|privip|previp)$/i.test(tagText);
-    }
-
     function render() {
         const chatItems = document.querySelectorAll('.conversation');
 
         chatItems.forEach(chat => {
             const nameEl = chat.querySelector('.conversation--user');
-            if (!nameEl) return;
+            if (!nameEl) return; // Безопасный пропуск, если блок еще не прогрузился
             
             const chatName = nameEl.textContent.trim();
             const cached = dataCache.get(chatName) || { tags: [], project: null, status: null };
 
-            // ФИКС ВЕРСТКИ: Точечный поиск нужного контейнера, а не общего родителя
-            const truncateEl = chat.querySelector('.truncate.text-label-small');
-            if (!truncateEl) return;
+            // Безопасный поиск контейнера с названием проекта (Gama Regular и т.д.)
+            const titleContainer = nameEl.previousElementSibling;
+            if (!titleContainer) return;
             
-            const sourceContainer = truncateEl.closest('.flex-1.min-w-0');
+            const sourceContainer = titleContainer.querySelector('[title]');
             if (!sourceContainer) return;
+
+            const iconWrapper = sourceContainer.querySelector('.text-n-slate-11.flex-shrink-0, .i-woot-website, .i-woot-telegram')?.parentElement;
+            const truncateEl = sourceContainer.querySelector('.truncate');
 
             let dProj = cached.project;
             let dStat = cached.status;
 
+            // Вытягиваем проект прямо из верстки сайта
             if (!dProj) {
-                const fullText = sourceContainer.getAttribute('title') || truncateEl.textContent.trim();
+                const fullText = sourceContainer.getAttribute('title') || (truncateEl ? truncateEl.textContent.trim() : '');
                 if (fullText) {
-                    const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|.*_V2))?$/i);
+                    // Регулярка теперь распознает TG и Regular отдельно
+                    const match = fullText.match(/^(.*?)(?:\s+(VIP|PRIVIP|PREVIP|REGULAR|TG|.*_V2))?$/i);
                     dProj = match ? match[1].trim() : fullText;
                     dStat = match && match[2] ? match[2].toUpperCase() : null;
                 }
             }
 
-            // Прячем стандартную иконку (tg/веб) и старый текст
-            const iconWrapper = sourceContainer.querySelector('.inline-flex.flex-shrink-0');
-            if (iconWrapper) iconWrapper.style.display = 'none';
-            truncateEl.style.display = 'none';
+            // Прячем старые иконки и текст
+            if (iconWrapper && iconWrapper.style.display !== 'none') iconWrapper.style.display = 'none';
+            if (truncateEl && truncateEl.style.display !== 'none') truncateEl.style.display = 'none';
 
             let badgeWrapper = sourceContainer.querySelector('.custom-badges-wrapper');
             if (!badgeWrapper) {
@@ -155,13 +127,13 @@
             }
 
             if (dStat) {
-                if (isVipEquivalent(dStat)) vipShown = true;
+                if (/^(vip|privip|previp)$/i.test(dStat)) vipShown = true;
                 html += `<span style="${getTagStyle(dStat)}">${dStat}</span>`;
             }
 
-            if (cached.tags.length > 0) {
+            if (cached.tags && cached.tags.length > 0) {
                 cached.tags.forEach(t => {
-                    if (isVipEquivalent(t)) {
+                    if (/^(vip|privip|previp)$/i.test(t)) {
                         if (vipShown) return;
                         vipShown = true;
                     }
@@ -175,35 +147,38 @@
         });
     }
 
-    // ФИКС ПРОИЗВОДИТЕЛЬНОСТИ: Оптимизация (Debounce) для слабых ПК коллег
+    // Observer с задержкой, чтобы не вешать страницу при быстрых изменениях
     let observerTimeout = null;
     const observer = new MutationObserver(() => {
         if (observerTimeout) clearTimeout(observerTimeout);
         observerTimeout = setTimeout(() => {
-            const activeName = getActiveChatName();
-            if (activeName) {
-                const extracted = extractData();
-                const existing = dataCache.get(activeName) || { tags: [], project: null, status: null };
-
-                dataCache.set(activeName, {
-                    tags: extracted.tags.length > 0 ? extracted.tags : existing.tags,
-                    project: extracted.project || existing.project,
-                    status: extracted.status || existing.status
-                });
+            const activeChat = document.querySelector('.conversation.active');
+            if (activeChat) {
+                const nameEl = activeChat.querySelector('.conversation--user');
+                if (nameEl) {
+                    const activeName = nameEl.textContent.trim();
+                    const extracted = extractData();
+                    const existing = dataCache.get(activeName) || { tags: [], project: null, status: null };
+                    
+                    dataCache.set(activeName, {
+                        tags: extracted.tags.length > 0 ? extracted.tags : existing.tags,
+                        project: extracted.project || existing.project,
+                        status: extracted.status || existing.status
+                    });
+                }
             }
-
             hideUnwantedAttributes();
             render();
-        }, 150); // Ждем 150мс после изменений DOM, чтобы не вешать браузер
+        }, 300);
     });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
-    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-})();
-})();
+    // Фолбек: Принудительно запускаем рендер каждые 2 секунды. 
+    // Это гарантирует, что бейджи прогрузятся даже если Observer пропустит загрузку страницы.
+    setInterval(() => {
+        render();
+        hideUnwantedAttributes();
+    }, 2000);
 
 })();
