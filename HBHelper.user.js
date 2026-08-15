@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HBHelper
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @author       Calvin
 // @match        *://*.fundist.org/*
 // @match        *://backoffice.r7.casino/*
@@ -27,14 +27,14 @@
     ];
 
     const r7Bonuses = {
-        2: "Бонус: 50 FS в слотах Zeus vs Hades/Big Bass Bonanza/Big Bass Bonanza 1000\nВейджер: х35\nВремя на отыгрыш: 1 день\nМакс выигрыш: 1 500 RUB / 15 EUR\nТег: Birthday_2lvl\nПромокод: HAPPY2\nСтавка: 5 рублей\nBonus ID: 112028",
-        3: "Бонус: 75 FS в слотах Zeus vs Hades/Big Bass Bonanza/Big Bass Bonanza 1000\nВейджер: х35\nВремя на отыгрыш: 2 дня\nМакс выигрыш: 2500 RUB / 25 EUR\nТег: Birthday_3lvl\nПромокод: HAPPY3\nСтавка: 5 рублей\nBonus ID: 112034",
-        4: "Бонус: 100 FS в слотах The Dog House/Sweet Bonanza Super Scatter/Gates of Olympus Super Scatter\nВейджер: х35\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 3000 RUB / 30 EUR\nТег: Birthday_4lvl\nПромокод: HAPPY4\nСтавка: 10 рублей\nBonus ID: 112037",
-        5: "Бонус: 125 FS в слотах The Dog House/Sweet Bonanza Super Scatter/Gates of Olympus Super Scatter\nВейджер: х30\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 5000 RUB / 50 EUR\nТег: Birthday_5lvl\nПромокод: HAPPY5\nСтавка: 20 рублей\nBonus ID: 112040",
-        6: "Бонус: 5000 RUB / 50 EUR на бонусный баланс\nВейджер: х20\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 10 000 RUB / 100 EUR\nТег: Birthday_6lvl\nПромокод: HAPPY6\nBonus ID: 112058",
-        7: "Бонус: 7 500 RUB / 75 EUR на бонусный баланс\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 15 000 RUB / 150 EUR\nТег: Birthday_7lvl\nПромокод: HAPPY7\nBonus ID: 112061",
-        8: "Бонус: 10 000 RUB / 100 EUR на бонусный баланс\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 20 000 RUB / 200 EUR\nТег: Birthday_8lvl\nПромокод: HAPPY8\nBonus ID: 112064",
-        9: "Бонус: 20 000 RUB / 200 EUR на бонусный баланс\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 40 000 RUB / 400 EUR\nТег: Birthday_9lvl\nПромокод: HAPPY9\nBonus ID: 112067",
+        2: "Бонус: 50 FS в слотах Zeus vs Hades - Gods of War/ Big Bass Bonanza/Big Bass Bonanza 1000\nВейджер: х20\nВремя на отыгрыш: 1 день\nМакс выигрыш: 1 000 RUB / 10 EUR\nТег: Birthday_2lvl\nПромокод: HAPPY2\nСтавка: 5 рублей\nBonus ID: 112028",
+        3: "Бонус: 75 FS в слотах Zeus vs Hades - Gods of War/ Big Bass Bonanza/Big Bass Bonanza 1000\nВейджер: х20\nВремя на отыгрыш: 2 дня\nМакс выигрыш: 1 000 RUB / 10 EUR\nТег: Birthday_3lvl\nПромокод: HAPPY3\nСтавка: 5 рублей\nBonus ID: 112034",
+        4: "Бонус: 100 FS в слотах The Dog House/Sweet Bonanza Super Scatter/Gates of Olympus Super Scatter\nВейджер: х20\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 1250 RUB / 12.50 EUR\nТег: Birthday_4lvl\nПромокод: HAPPY4\nСтавка: 10 рублей\nBonus ID: 112037",
+        5: "Бонус: 125 FS в слотах The Dog House/Sweet Bonanza Super Scatter/Gates of Olympus Super Scatter\nВейджер: х20\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 2500 RUB / 25 EUR\nТег: Birthday_5lvl\nПромокод: HAPPY5\nСтавка: 20 рублей\nBonus ID: 112040",
+        6: "Бонус: 150 fs в слотах Gates of Olympus Super Scatter, Sweet Bonanza Super Scatter, The Dog House\nВейджер: х20\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 4500 RUB / 45 EUR\nТег: Birthday_6lvl\nПромокод: HAPPY6\nBonus ID: 112058",
+        7: "Бонус: 200 fs в слотах The Dog House, Gates of Olympus Super Scatter, Sweet Bonanza Super Scatter\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 6000 RUB / 60 EUR\nТег: Birthday_7lvl\nПромокод: HAPPY7\nBonus ID: 112061",
+        8: "Бонус: 250 fs в слотах The Dog House, Gates of Olympus Super Scatter, Sweet Bonanza Super Scatter\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 7500 RUB / 75 EUR\nТег: Birthday_8lvl\nПромокод: HAPPY8\nBonus ID: 112064",
+        9: "Бонус: 15 000 RUB / 150 EUR на бонусный баланс\nВейджер: х15\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 40 000 RUB / 400 EUR\nТег: Birthday_9lvl\nПромокод: HAPPY9\nBonus ID: 112067",
         10: "Бонус: 35 000 RUB / 350 EUR на бонусный баланс\nВейджер: х10\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 60 000 RUB / 600 EUR\nТег: Birthday_10lvl\nПромокод: HAPPY10\nBonus ID: 112709",
         11: "Бонус: 45 000 RUB / 450 EUR на бонусный баланс\nВейджер: х10\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 70 000 RUB / 700 EUR\nТег: Birthday_11lvl\nПромокод: HAPPY11\nBonus ID: 112889",
         12: "Бонус: 55 000 RUB / 550 EUR на бонусный баланс\nВейджер: х5\nВремя на отыгрыш: 3 дня\nМакс выигрыш: 80 000 RUB / 800 EUR\nТег: Birthday_12lvl\nПромокод: HAPPY12\nBonus ID: 112895",
