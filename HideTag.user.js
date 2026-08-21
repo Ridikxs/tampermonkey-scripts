@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HideTag
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  Скрывает теги с сохранением оригинальных стилей и крестиков.
 // @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
@@ -40,44 +40,27 @@
         "Alina.M_v2", "Liza Se_v2", "Anna Sh_v2"
     ];
 
-    function processTags() {
-        const statusContainer = document.querySelector(".fun-page-header__statuses");
-        if (!statusContainer) return;
+    // Внедряем стили, которые управляют отображением без изменения HTML-структуры
+    function initStyles() {
+        if (document.getElementById("ht-styles")) return;
+        const style = document.createElement("style");
+        style.id = "ht-styles";
+        style.textContent = `
+            /* Делаем контейнер гибким */
+            .fun-page-header__statuses {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                align-items: center !important;
+                gap: 5px !important;
+            }
 
-        // Берем теги, которые ПРЯМО СЕЙЧАС лежат в главном контейнере
-        const tags = statusContainer.querySelectorAll(".fun-page-header__status-btn.allow-edit");
+            /* Жестко фиксируем визуальный порядок основных кнопок, чтобы они не скакали */
+            .fun-page-header__add-status-btn { order: 2 !important; margin-left: 5px; }
+            .fun-page-header__status-history-btn { order: 3 !important; margin-left: 5px; }
 
-        // Если тегов еще нет и кнопка не создана — ждем (решает проблему асинхронной загрузки)
-        if (tags.length === 0 && !document.getElementById("toggle-tags-btn")) return;
-
-        // 1. Создаем контейнер для скрытых тегов (если его еще нет)
-        let tagsWrapper = document.getElementById("tags-wrapper");
-        if (!tagsWrapper) {
-            tagsWrapper = document.createElement("div");
-            tagsWrapper.id = "tags-wrapper";
-            tagsWrapper.className = "fun-page-header__statuses";
-            tagsWrapper.style.cssText = `
-                display: none;
-                flex-wrap: wrap;
-                gap: 5px;
-                margin-top: 12px;
-                padding: 12px;
-                background: rgba(0,0,0,0.02);
-                border: 1px solid #e7eaec;
-                border-radius: 4px;
-                width: 100%;
-            `;
-            statusContainer.after(tagsWrapper);
-        }
-
-        // 2. Создаем кнопку управления (если ее еще нет)
-        let toggleBtn = document.getElementById("toggle-tags-btn");
-        if (!toggleBtn) {
-            toggleBtn = document.createElement("button");
-            toggleBtn.id = "toggle-tags-btn";
-            toggleBtn.innerHTML = `<i class="fa fa-tags" style="margin-right: 5px;"></i> Остальные`;
-            toggleBtn.className = "fun-page-header__status-btn";
-            toggleBtn.style.cssText = `
+            /* Кнопка скрытия/показа */
+            .ht-btn-toggle {
+                order: 4;
                 display: inline-flex;
                 align-items: center;
                 height: 30px;
@@ -91,49 +74,111 @@
                 font-weight: 600;
                 cursor: pointer;
                 vertical-align: middle;
-            `;
-
-            toggleBtn.onclick = (e) => {
-                e.preventDefault();
-                const isHidden = tagsWrapper.style.display === "none";
-                tagsWrapper.style.display = isHidden ? "flex" : "none";
-                toggleBtn.style.background = isHidden ? "#1ab394" : "#f05563";
-                toggleBtn.innerHTML = isHidden ?
-                    `<i class="fa fa-eye-slash" style="margin-right: 5px;"></i> Скрыть` :
-                    `<i class="fa fa-tags" style="margin-right: 5px;"></i> Остальные`;
-            };
-
-            // Надежный поиск кнопки истории: ищем по ID или классу
-            const historyBtn = statusContainer.querySelector("#TagsHistoryOpenButton, .fun-page-header__status-history-btn, button:not(.allow-edit)");
-            if (historyBtn) {
-                historyBtn.before(toggleBtn);
-            } else {
-                statusContainer.appendChild(toggleBtn);
             }
+
+            /* Линия-разделитель (переносит скрытые теги на новую строку) */
+            .ht-break {
+                order: 5;
+                flex-basis: 100%;
+                height: 0;
+                margin: 5px 0 0 0;
+                border-top: 1px solid #e7eaec;
+                display: none;
+            }
+
+            /* Дополнительные теги визуально сдвигаются в конец */
+            .ht-tag-extra {
+                order: 6;
+            }
+
+            /* Логика скрытия */
+            .ht-hidden-state .ht-tag-extra {
+                display: none !important;
+            }
+            .ht-visible-state .ht-break {
+                display: block !important;
+            }
+            .ht-visible-state .ht-tag-extra {
+                display: inline-flex !important;
+                background: rgba(0,0,0,0.04) !important;
+                border: 1px dashed #ccc !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function processTags() {
+        const container = document.querySelector(".fun-page-header__statuses");
+        if (!container) return;
+
+        initStyles();
+
+        // Задаем начальное состояние
+        if (!container.classList.contains("ht-container")) {
+            container.classList.add("ht-container", "ht-hidden-state");
         }
 
-        // 3. Динамически переносим теги.
-        // Перебираем только те теги, которые всё ещё висят в основном контейнере.
+        // Помечаем теги
+        const tags = container.querySelectorAll(".fun-page-header__status-btn.allow-edit");
         tags.forEach(tag => {
-            // Безопасное чтение текста (избегает захвата лишних символов из иконки-крестика)
+            if (tag.dataset.htProcessed) return;
+
             const nameSpan = tag.querySelector('.name');
             const text = nameSpan ? nameSpan.innerText.trim() : tag.innerText.trim();
 
             if (!mainTags.includes(text)) {
-                tagsWrapper.appendChild(tag); // Перемещаем тег в скрытый блок
+                tag.classList.add("ht-tag-extra");
             }
+            tag.dataset.htProcessed = "true";
         });
+
+        // Создаем кнопку "Остальные" / "Скрыть"
+        let toggleBtn = document.getElementById("toggle-tags-btn");
+        if (!toggleBtn) {
+            toggleBtn = document.createElement("button");
+            toggleBtn.id = "toggle-tags-btn";
+            toggleBtn.className = "ht-btn-toggle";
+            toggleBtn.innerHTML = `<i class="fa fa-tags" style="margin-right: 5px;"></i> Остальные`;
+            toggleBtn.onclick = (e) => {
+                e.preventDefault();
+                const isHidden = container.classList.contains("ht-hidden-state");
+                if (isHidden) {
+                    container.classList.remove("ht-hidden-state");
+                    container.classList.add("ht-visible-state");
+                    toggleBtn.style.background = "#1ab394";
+                    toggleBtn.innerHTML = `<i class="fa fa-eye-slash" style="margin-right: 5px;"></i> Скрыть`;
+                } else {
+                    container.classList.remove("ht-visible-state");
+                    container.classList.add("ht-hidden-state");
+                    toggleBtn.style.background = "#f05563";
+                    toggleBtn.innerHTML = `<i class="fa fa-tags" style="margin-right: 5px;"></i> Остальные`;
+                }
+            };
+            container.appendChild(toggleBtn);
+        } else if (toggleBtn.parentElement !== container) {
+            // Если SPA перерисовало страницу, возвращаем кнопку на место
+            container.appendChild(toggleBtn);
+        }
+
+        // Создаем невидимый разделитель для красоты
+        let breakEl = document.getElementById("ht-break-line");
+        if (!breakEl) {
+            breakEl = document.createElement("div");
+            breakEl.id = "ht-break-line";
+            breakEl.className = "ht-break";
+            container.appendChild(breakEl);
+        } else if (breakEl.parentElement !== container) {
+            container.appendChild(breakEl);
+        }
     }
 
-    // Observer теперь постоянно следит за изменениями
-    // Если сайт догрузит новый тег через AJAX, процесс сработает снова и уберет его
+    // Дебаунс (задержка) защитит от зависаний, если сайт загружает теги поштучно
+    let timeout = null;
     const observer = new MutationObserver(() => {
-        processTags();
+        clearTimeout(timeout);
+        timeout = setTimeout(processTags, 50);
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
-
-})();
     observer.observe(document.body, { childList: true, subtree: true });
 
 })();
