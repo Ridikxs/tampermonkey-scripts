@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         HideTag
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.3
 // @description  Скрывает теги с сохранением оригинальных стилей и крестиков.
 // @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
 // @match        https://*.boadmin.org/ru/Users/Summary*
+// @match        https://backoffice.*
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideTag.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/HideTag.user.js
 // @grant        none
