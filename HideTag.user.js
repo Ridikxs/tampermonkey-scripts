@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         HideTag
 // @namespace    http://tampermonkey.net/
-// @version      2.6
-// @description  Скрывает теги с сохранением оригинальных стилей и крестиков.
+// @version      2.7
+// @description  Скрывает теги без поломки DOM. Сохраняет оригинальные цвета тегов (исправлен баг с белым текстом).
 // @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.*.casino/ru/Users/Summary*
@@ -100,8 +100,7 @@
             }
             .ht-visible-state .ht-tag-extra {
                 display: inline-flex !important;
-                background: rgba(0,0,0,0.04) !important;
-                border: 1px dashed #ccc !important;
+                opacity: 0.75 !important; /* Делаем их слегка прозрачными, сохраняя родной цвет */
             }
         `;
         document.head.appendChild(style);
