@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         AutoGreeter
 // @namespace    http://tampermonkey.net/
-// @version      2.1
-// @description  Авто приветствие.
+// @version      3.4
+// @description  Авто приветствие. Добавлена очистка памяти для возвращающихся клиентов.
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @match        https://blueripple.xyz/*
@@ -19,12 +19,12 @@
     // 1. СИСТЕМА НАСТРОЕК (LOCAL STORAGE)
     // ==========================================
     const CONFIG_KEY = 'autoGreeterConfig_v1';
-    
+
     const defaultConfig = {
         delay: 15,
         greetings: {
-            "sparkmoth.com": "Меня зовут Кэлвин, сегодня я ваш оператор.",
-            "blueripple.xyz": "Меня зовут Иван, сегодня я ваш оператор."
+            "sparkmoth.com": "Напиши тут...",
+            "blueripple.xyz": "Напиши тут..."
         }
     };
 
@@ -35,15 +35,16 @@
     }
 
     const domain = window.location.hostname;
-    
+
     let greetingText = config.greetings[domain] || "";
     let autoGreetDelay = config.delay * 1000;
 
     let isProcessing = false;
-    
-    // Глобальные списки теперь хранят уникальные слепки чатов (chatKey), а не просто имена
-    const processedChats = new Set(); 
+
+    // Глобальные списки
+    const processedChats = new Set();
     const autoTimers = new Map();
+    const chatLastSeen = new Map(); // Для отслеживания закрытых чатов (очистка памяти)
 
     // ==========================================
     // 2. ИНТЕРФЕЙС НАСТРОЕК (GUI)
@@ -74,15 +75,15 @@
     }
 
     function saveConfig(newDelay, newSparkmothText, newBluerippleText) {
-        config.delay = Math.max(1, Math.min(30, parseInt(newDelay) || 15)); 
+        config.delay = Math.max(1, Math.min(30, parseInt(newDelay) || 15));
         config.greetings["sparkmoth.com"] = newSparkmothText;
         config.greetings["blueripple.xyz"] = newBluerippleText;
-        
+
         localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-        
+
         greetingText = config.greetings[domain] || "";
         autoGreetDelay = config.delay * 1000;
-        
+
         closeSettingsModal();
         showToast('✅ Настройки успешно сохранены!');
     }
@@ -108,10 +109,10 @@
 
         modalBox.innerHTML = `
             <h2 style="margin: 0; font-size: 18px; font-weight: bold; border-bottom: 1px solid #334155; padding-bottom: 12px;">⚙️ Настройки бота</h2>
-            
+
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <label style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Задержка авто-отправки (сек):</label>
-                <input type="number" id="ag-delay-input" min="1" max="30" value="${config.delay}" 
+                <input type="number" id="ag-delay-input" min="1" max="30" value="${config.delay}"
                     style="padding: 8px; border: 1px solid #475569; border-radius: 6px; font-size: 14px; background: #0f172a; color: #f8fafc; outline: none;">
                 <span style="font-size: 11px; color: #94a3b8;">Укажите значение от 1 до 30 секунд.</span>
             </div>
@@ -137,7 +138,7 @@
 
         const cancelBtn = document.getElementById('ag-cancel-btn');
         const saveBtn = document.getElementById('ag-save-btn');
-        
+
         cancelBtn.onmouseover = () => cancelBtn.style.background = '#475569';
         cancelBtn.onmouseout = () => cancelBtn.style.background = '#334155';
         saveBtn.onmouseover = () => saveBtn.style.background = '#059669';
@@ -158,38 +159,85 @@
         if (modal) modal.remove();
     }
 
-    function injectSettingsButton() {
-        if (document.getElementById('ag-sidebar-btn')) return;
+    function cancelAllGreetings() {
+        autoTimers.clear();
+
+        const conversations = document.querySelectorAll('div.conversation');
+        conversations.forEach(conv => {
+            const nameEl = conv.querySelector('.conversation--user');
+            if (!nameEl) return;
+
+            const userName = nameEl.childNodes[0] ? nameEl.childNodes[0].textContent.trim() : nameEl.innerText.trim();
+            const avatarEl = conv.querySelector('[role="img"]');
+            const avatarColor = avatarEl ? avatarEl.style.backgroundColor : 'no-color';
+            const initialsEl = conv.querySelector('.select-none');
+            const initials = initialsEl ? initialsEl.innerText.trim() : 'no-initials';
+
+            const chatKey = `${userName}_${initials}_${avatarColor}`;
+
+            processedChats.add(chatKey);
+
+            const wrapper = conv.querySelector('.quick-greet-wrapper');
+            if (wrapper) wrapper.remove();
+        });
+
+        isProcessing = false;
+        showToast('🛑 Все текущие автоприветствия отменены!');
+    }
+
+    function injectSidebarButtons() {
+        if (document.getElementById('ag-sidebar-controls')) return;
 
         const sidebarBottomSection = document.querySelector('aside > section:last-of-type');
         if (!sidebarBottomSection) return;
 
-        const btnWrapper = document.createElement('div');
-        btnWrapper.id = 'ag-sidebar-btn';
-        btnWrapper.style.cssText = 'padding: 8px; width: 100%; flex-shrink: 0;';
+        const controlsWrapper = document.createElement('div');
+        controlsWrapper.id = 'ag-sidebar-controls';
+        controlsWrapper.style.cssText = 'padding: 8px; width: 100%; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px;';
 
-        const btn = document.createElement('button');
-        btn.innerHTML = '🤖 Настроить бота';
-        btn.style.cssText = `
-            width: 100%; padding: 6px 12px; background: rgba(16, 185, 129, 0.1); 
-            color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); 
-            border-radius: 8px; font-size: 13px; font-weight: 600; 
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerHTML = '🛑 Отменить приветствия';
+        cancelBtn.style.cssText = `
+            width: 100%; padding: 6px 12px; background: rgba(239, 68, 68, 0.1);
+            color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px; font-size: 13px; font-weight: 600;
             cursor: pointer; transition: all 0.2s ease;
             display: flex; align-items: center; justify-content: center; gap: 6px;
         `;
-        
-        btn.onmouseover = () => {
-            btn.style.background = 'rgba(16, 185, 129, 0.2)';
-            btn.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-        };
-        btn.onmouseout = () => {
-            btn.style.background = 'rgba(16, 185, 129, 0.1)';
-            btn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-        };
 
-        btn.onclick = openSettingsModal;
-        btnWrapper.appendChild(btn);
-        sidebarBottomSection.parentNode.insertBefore(btnWrapper, sidebarBottomSection);
+        cancelBtn.onmouseover = () => {
+            cancelBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+            cancelBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+        };
+        cancelBtn.onmouseout = () => {
+            cancelBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+            cancelBtn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        };
+        cancelBtn.onclick = cancelAllGreetings;
+
+        const settingsBtn = document.createElement('button');
+        settingsBtn.innerHTML = '🤖 Настроить бота';
+        settingsBtn.style.cssText = `
+            width: 100%; padding: 6px 12px; background: rgba(16, 185, 129, 0.1);
+            color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s ease;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        `;
+
+        settingsBtn.onmouseover = () => {
+            settingsBtn.style.background = 'rgba(16, 185, 129, 0.2)';
+            settingsBtn.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+        };
+        settingsBtn.onmouseout = () => {
+            settingsBtn.style.background = 'rgba(16, 185, 129, 0.1)';
+            settingsBtn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        };
+        settingsBtn.onclick = openSettingsModal;
+
+        controlsWrapper.appendChild(cancelBtn);
+        controlsWrapper.appendChild(settingsBtn);
+        sidebarBottomSection.parentNode.insertBefore(controlsWrapper, sidebarBottomSection);
     }
 
     // ==========================================
@@ -197,10 +245,13 @@
     // ==========================================
     function isAlreadyGreeted() {
         const messages = document.querySelectorAll('.message-bubble-container .prose-bubble p');
-        const sparkText = config.greetings["sparkmoth.com"].trim().split(',')[0]; 
+        const sparkText = config.greetings["sparkmoth.com"].trim().split(',')[0];
         const blueText = config.greetings["blueripple.xyz"].trim().split(',')[0];
 
-        for (let msg of messages) {
+        // Проверяем только последние 7 сообщений (чтобы не зацепить историю из прошлых сессий)
+        const recentMessages = Array.from(messages).slice(-7);
+
+        for (let msg of recentMessages) {
             const text = msg.innerText;
             if ((sparkText && text.includes(sparkText)) || (blueText && text.includes(blueText))) {
                 return true;
@@ -210,7 +261,8 @@
     }
 
     function markAsDoneAndHide(chatKey, wrapper, greetBtn) {
-        processedChats.add(chatKey); 
+        processedChats.add(chatKey);
+        chatLastSeen.set(chatKey, Date.now()); // Обновляем время, когда мы его видели
 
         if (autoTimers.has(chatKey)) {
             autoTimers.delete(chatKey);
@@ -225,7 +277,7 @@
             greetBtn.innerHTML = '✅';
             greetBtn.style.background = 'rgb(100, 116, 139)';
         }
-        
+
         const dismissBtn = wrapper.querySelector('.dismiss-btn');
         if (dismissBtn) dismissBtn.style.display = 'none';
 
@@ -246,7 +298,7 @@
 
         if (isProcessing) return;
         isProcessing = true;
-        
+
         const originalBtnText = greetBtn ? greetBtn.innerHTML : '👋';
         if (greetBtn) {
             greetBtn.innerHTML = '⏳';
@@ -256,16 +308,16 @@
         conv.click();
 
         let checkCount = 0;
-        
+
         const checkInterval = setInterval(() => {
             checkCount++;
-            
+
             const editor = document.querySelector('.ProseMirror');
             const sendButton = document.querySelector('button[type="submit"]');
-            
+
             if (editor && sendButton && conv.classList.contains('active')) {
                 clearInterval(checkInterval);
-                
+
                 setTimeout(() => {
                     if (isAlreadyGreeted()) {
                         markAsDoneAndHide(chatKey, wrapper, greetBtn);
@@ -275,7 +327,7 @@
                     editor.focus();
                     document.execCommand('insertText', false, greetingText);
                     editor.dispatchEvent(new Event('input', { bubbles: true }));
-                    
+
                     setTimeout(() => {
                         sendButton.disabled = false;
                         sendButton.click();
@@ -283,8 +335,8 @@
                     }, 150);
 
                 }, 500);
-                
-            } else if (checkCount > 30) { 
+
+            } else if (checkCount > 30) {
                 clearInterval(checkInterval);
                 if (greetBtn) {
                     greetBtn.innerHTML = '❌';
@@ -302,43 +354,50 @@
     }
 
     function renderButtons() {
-        injectSettingsButton();
+        injectSidebarButtons();
 
         const conversations = document.querySelectorAll('div.conversation');
         const now = Date.now();
-        
+        const currentActiveKeys = new Set();
+
         conversations.forEach(conv => {
             const nameEl = conv.querySelector('.conversation--user');
             if (!nameEl) return;
-            
-            // 1. Создаем уникальный слепок чата (Имя + Инициалы + Цвет аватарки)
+
             const userName = nameEl.childNodes[0] ? nameEl.childNodes[0].textContent.trim() : nameEl.innerText.trim();
             const avatarEl = conv.querySelector('[role="img"]');
             const avatarColor = avatarEl ? avatarEl.style.backgroundColor : 'no-color';
             const initialsEl = conv.querySelector('.select-none');
             const initials = initialsEl ? initialsEl.innerText.trim() : 'no-initials';
-            
+
             const chatKey = `${userName}_${initials}_${avatarColor}`;
+
+            // Фиксируем, что этот чат сейчас на экране
+            currentActiveKeys.add(chatKey);
+            chatLastSeen.set(chatKey, now);
 
             let wrapper = conv.querySelector('.quick-greet-wrapper');
 
             const isClosed = conv.closest('.resolved-in-open') || (nameEl.innerText && nameEl.innerText.toLowerCase().includes('закрыт'));
-            
+
+            // Если чат закрыт, немедленно удаляем его из памяти
             if (isClosed) {
-                if (autoTimers.has(chatKey)) autoTimers.delete(chatKey); 
-                if (wrapper) wrapper.remove(); 
-                return; 
+                if (autoTimers.has(chatKey)) autoTimers.delete(chatKey);
+                processedChats.delete(chatKey);
+                chatLastSeen.delete(chatKey);
+                if (wrapper) wrapper.remove();
+                return;
             }
 
             if (processedChats.has(chatKey)) {
                 if (wrapper) wrapper.remove();
                 if (autoTimers.has(chatKey)) autoTimers.delete(chatKey);
-                return; 
+                return;
             }
 
             if (wrapper && wrapper.getAttribute('data-target-chat') !== chatKey) {
-                wrapper.remove(); 
-                wrapper = null; 
+                wrapper.remove();
+                wrapper = null;
             }
 
             let greetBtn = wrapper ? wrapper.querySelector('.action-greet-btn') : null;
@@ -353,7 +412,7 @@
                 `;
 
                 greetBtn = document.createElement('button');
-                greetBtn.className = 'action-greet-btn'; 
+                greetBtn.className = 'action-greet-btn';
                 greetBtn.innerHTML = '👋';
                 greetBtn.title = 'Поздороваться автоматически';
                 greetBtn.style.cssText = `
@@ -406,7 +465,7 @@
                 dismissBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    markAsDoneAndHide(chatKey, wrapper, null); 
+                    markAsDoneAndHide(chatKey, wrapper, null);
                 });
 
                 wrapper.appendChild(dismissBtn);
@@ -421,14 +480,26 @@
                 const timePassed = now - spawnTime;
 
                 if (timePassed >= autoGreetDelay) {
-                    if (isProcessing) return; 
-                    autoTimers.delete(chatKey); 
+                    if (isProcessing) return;
+                    autoTimers.delete(chatKey);
                     if (wrapper && greetBtn) {
                         processGreeting(conv, chatKey, wrapper, greetBtn);
                     }
                 }
             }
         });
+
+        // ==========================================
+        // ОЧИСТКА ПАМЯТИ (GARBAGE COLLECTION)
+        // ==========================================
+        for (const [key, lastSeen] of chatLastSeen.entries()) {
+            // Если чат пропал с экрана больше чем на 15 секунд — стираем его из памяти
+            if (!currentActiveKeys.has(key) && (now - lastSeen > 15000)) {
+                processedChats.delete(key);
+                chatLastSeen.delete(key);
+                autoTimers.delete(key);
+            }
+        }
     }
 
     let observerTimer = null;
