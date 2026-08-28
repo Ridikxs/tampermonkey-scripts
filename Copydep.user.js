@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Copydep
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Утилита для копирования депов.
-// @author       Calvin/River
+// @version      2.2
+// @description  Утилита для копирования данных клиента из шапки.
+// @author       Calvin
 // @match        https://www2.fundist.org/ru/Users/Summary*
 // @match        https://www7.fundist.org/ru/Users/Summary*
 // @match        https://backoffice.r7.casino/ru/Users/Summary*
@@ -61,7 +61,7 @@
         const userIdEl = document.querySelector('#SummaryUserId');
         const userId = userIdEl ? userIdEl.textContent.trim() : '';
 
-        // 1. Поиск СТАТУСА (строго из списка)
+        // Поиск СТАТУСА (строго из списка)
         let userStatus = '';
         const statusNodes = document.querySelectorAll('.fun-page-header__statuses .name');
         let maxPriority = -1;
@@ -82,14 +82,12 @@
             }
         });
 
-        // 2. Поиск ПРОЕКТА (несколько способов)
+        // Поиск ПРОЕКТА
         let projectName = '';
-        // Способ А: Из бокового меню
         const projectNameEl = document.querySelector('.project-name.word-break');
         if (projectNameEl) {
             projectName = projectNameEl.textContent.trim();
         }
-        // Способ Б: Если А не сработал, пробуем вытянуть из CurrentLogin
         if (!projectName) {
             const loginEl = document.querySelector('#CurrentLogin');
             const dataLogin = loginEl ? loginEl.getAttribute('data-login') || '' : '';
@@ -103,56 +101,73 @@
         return { userId, userStatus, projectName };
     }
 
-    function createControls() {
-        if (document.getElementById('bulk-copy-container')) return;
-        const table = document.querySelector('#lastDepositsAllTable');
-        if (!table) return;
+    function injectHeaderButton() {
+        // Проверяем, не добавлена ли уже кнопка
+        if (document.getElementById('copydep-header-btn')) return;
 
-        const container = document.createElement('div');
-        container.id = 'bulk-copy-container';
-        container.style = 'margin-bottom: 15px; display: flex; gap: 10px; align-items: center;';
+        // Ищем иконку копирования ID в шапке
+        const copyIcon = document.getElementById('SummaryUserIdCopy');
+        if (!copyIcon) return;
 
-        const btnSelectAll = document.createElement('button');
-        btnSelectAll.textContent = '☑️ Выбрать все';
-        btnSelectAll.style = 'padding: 8px 15px; background: #5bc0de; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;';
+        const parentTooltip = copyIcon.closest('.usertooltip');
+        if (!parentTooltip) return;
 
-        const btnCopy = document.createElement('button');
-        btnCopy.textContent = '📋 Копировать выбранные';
-        btnCopy.style = 'padding: 8px 15px; background: #1ab394; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px;';
+        // Создаем контейнер для нашей кнопки
+        const wrapper = document.createElement('div');
+        wrapper.id = 'copydep-header-btn';
+        wrapper.className = 'usertooltip'; // Чтобы стилистика отступов совпадала с сайтом
+        wrapper.style.marginLeft = '12px';
+        wrapper.style.display = 'inline-flex';
+        wrapper.style.alignItems = 'center';
 
-        btnSelectAll.onclick = () => {
-            const cbs = document.querySelectorAll('.dep-checkbox');
-            const someUnchecked = Array.from(cbs).some(c => !c.checked);
-            cbs.forEach(c => c.checked = someUnchecked);
-            btnSelectAll.textContent = someUnchecked ? '⬜ Снять выделение' : '☑️ Выбрать все';
-        };
+        const btn = document.createElement('button');
+        btn.innerHTML = '📋 Депозит';
 
-        btnCopy.onclick = () => {
-            const selected = document.querySelectorAll('.dep-checkbox:checked');
-            if (selected.length === 0) return;
+        // Стилизация для идеального отображения в светлой и темной теме
+        btn.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            background: #1ab394;
+            color: #ffffff !important;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+            line-height: 1.4;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            text-shadow: none;
+        `;
 
+        // Анимация при наведении и нажатии
+        btn.onmouseover = () => btn.style.background = '#18a689';
+        btn.onmouseout = () => btn.style.background = '#1ab394';
+        btn.onmousedown = () => btn.style.transform = 'scale(0.95)';
+        btn.onmouseup = () => btn.style.transform = 'scale(1)';
+
+        // Логика копирования
+        btn.onclick = () => {
             const info = getUserInfoFromHeader();
-            // Формируем вторую строку: "Статус Проект"
-            const secondLine = `${info.userStatus} ${info.projectName}`.trim();
+            const statusLower = info.userStatus ? info.userStatus.toLowerCase() : '';
+            const isVip = VALID_TAGS.includes(statusLower);
 
-            let lines = [info.userId, secondLine, ''];
+            let lines = [];
 
-            selected.forEach(cb => {
-                const row = cb.closest('tr');
-                const id = row.querySelector('td[name="col-ID"]').getAttribute('data-raw-id');
-                const note = row.querySelector('td[name="col-Note"]').getAttribute('data-trimmed-note');
-                const ext = row.querySelector('td[name="col-ExternalTID"]').textContent.trim();
+            if (!isVip) {
+                // Обычный игрок
+                lines.push(info.userId);
+                lines.push(info.projectName);
+            } else {
+                // VIP игрок
+                lines.push(info.userId);
+                lines.push(info.projectName);
+                lines.push(''); // Пустая строка
+                lines.push(info.userStatus);
 
-                let str = id;
-                if (note) str += ` ${note}`;
-                if (ext && ext !== '-') str += ` ${ext}`;
-                lines.push(str.trim());
-            });
-
-            lines.push('', '');
-
-            // Финансовый блок
-            if (info.userStatus && VALID_TAGS.includes(info.userStatus.toLowerCase())) {
+                // Финансовый блок
                 const dt1 = document.querySelector("#creditDebetTotals > dt:nth-child(1)")?.textContent.trim() || '';
                 const dd1 = document.querySelector("#creditDebetTotals > dd.text-danger")?.textContent.trim() || '';
                 if (dt1 || dd1) lines.push(`${dt1} ${dd1}`.trim());
@@ -169,40 +184,43 @@
             }
 
             GM_setClipboard(lines.join('\n').trim());
-            const origText = btnCopy.textContent;
-            btnCopy.textContent = '✅ Скопировано!';
-            setTimeout(() => btnCopy.textContent = origText, 1500);
+
+            // Визуальный фидбек на кнопке
+            const origText = btn.innerHTML;
+            btn.innerHTML = '✅ Скопировано!';
+            btn.style.background = '#128f76';
+            setTimeout(() => {
+                btn.innerHTML = origText;
+                btn.style.background = '#1ab394';
+            }, 1500);
         };
 
-        container.appendChild(btnSelectAll);
-        container.appendChild(btnCopy);
-        table.parentNode.insertBefore(container, table);
+        wrapper.appendChild(btn);
+
+        // Вставляем кнопку сразу после контейнера со стандартной иконкой копирования ID
+        parentTooltip.insertAdjacentElement('afterend', wrapper);
     }
 
     function processTable() {
         const rows = document.querySelectorAll('#lastDepositsAllTable > tbody > tr');
-        if (rows.length > 0) createControls();
 
         rows.forEach(row => {
             const colID = row.querySelector('td[name="col-ID"]');
-            if (colID && !colID.querySelector('.dep-checkbox')) {
+            // Проверяем атрибут, чтобы не обрабатывать строку дважды
+            if (colID && !colID.hasAttribute('data-processed')) {
                 const rawId = colID.textContent.trim();
                 const noteCell = row.querySelector('td[name="col-Note"]');
                 const noteText = noteCell.textContent.trim();
                 const trimmedNote = ensureSpaceAfterBracket(trimNoteAtDate(noteText));
                 const color = getColorForID(noteText.toLowerCase());
 
-                colID.setAttribute('data-raw-id', rawId);
-                noteCell.setAttribute('data-trimmed-note', trimmedNote);
-
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.className = 'dep-checkbox';
-                cb.style = 'margin-right: 8px; cursor: pointer; transform: scale(1.1);';
+                colID.setAttribute('data-processed', 'true');
 
                 const idSpan = document.createElement('span');
                 idSpan.textContent = rawId;
                 idSpan.style = `color: ${color}; cursor: pointer; font-weight: bold;`;
+
+                // Клик по ID в таблице скопирует строку с ID и описанием (как и было)
                 idSpan.onclick = () => {
                     let singleLine = `${rawId} ${trimmedNote}`;
                     const ext = row.querySelector('td[name="col-ExternalTID"]').textContent.trim();
@@ -210,32 +228,24 @@
                     GM_setClipboard(singleLine.trim());
                 };
 
-                const robot = document.createElement('span');
-                robot.textContent = ' 🤖';
-                robot.style.cursor = 'pointer';
-                robot.onclick = (e) => {
-                    e.stopPropagation();
-                    document.querySelectorAll('.dep-checkbox').forEach(c => c.checked = false);
-                    cb.checked = true;
-                    document.querySelector('#bulk-copy-container button:last-child').click();
-                };
-
                 colID.textContent = '';
                 colID.style.display = 'flex';
                 colID.style.alignItems = 'center';
-                colID.appendChild(cb);
                 colID.appendChild(idSpan);
-                colID.appendChild(robot);
             }
         });
     }
 
-    const observer = new MutationObserver(() => processTable());
+    // Observer следит за изменениями на странице, чтобы добавить кнопку и раскрасить таблицу при динамической подгрузке
+    const observer = new MutationObserver(() => {
+        injectHeaderButton();
+        processTable();
+    });
+
     window.addEventListener('load', () => {
+        injectHeaderButton();
         processTable();
         observer.observe(document.body, { childList: true, subtree: true });
     });
 
 })();
-
-
