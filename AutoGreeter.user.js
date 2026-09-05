@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         AutoGreeter
 // @namespace    http://tampermonkey.net/
-// @version      4.3
-// @description  Авто приветствие.
+// @version      4.4
+// @description  Авто приветствие. 
 // @author       Calvin
 // @match        https://sparkmoth.com/app/*
 // @match        https://blueripple.xyz/*
@@ -60,6 +60,7 @@
     // 2. ИНИЦИАЛИЗАЦИЯ И НАСТРОЙКИ
     // ==========================================
     const CONFIG_KEY = 'autoGreeterConfig_v1';
+    const PROCESSED_SESSION_KEY = 'ag_processed_chats_v1';
     const bc = new BroadcastChannel('ag_sync_channel');
 
     const isPhantom = new URLSearchParams(window.location.search).get('ag_phantom') === '1' || window.self !== window.top;
@@ -68,8 +69,8 @@
     const defaultConfig = {
         delay: 15,
         greetings: {
-            "sparkmoth.com": "Напиши тут...",
-            "blueripple.xyz": "Напиши тут..."
+            "sparkmoth.com": " ",
+            "blueripple.xyz": " "
         }
     };
 
@@ -84,7 +85,31 @@
     let autoGreetDelay = (config.delay ?? 15) * 1000;
     let isProcessing = false;
 
-    const processedChats = new Set();
+    // Хранилище обработанных чатов в sessionStorage (переживает перезагрузку страницы)
+    const loadProcessedChats = () => {
+        try {
+            return new Set(JSON.parse(sessionStorage.getItem(PROCESSED_SESSION_KEY) || '[]'));
+        } catch (e) {
+            return new Set();
+        }
+    };
+
+    const processedChats = loadProcessedChats();
+
+    const saveProcessedChats = () => {
+        sessionStorage.setItem(PROCESSED_SESSION_KEY, JSON.stringify(Array.from(processedChats)));
+    };
+
+    const markProcessed = (key) => {
+        processedChats.add(key);
+        saveProcessedChats();
+    };
+
+    const unmarkProcessed = (key) => {
+        processedChats.delete(key);
+        saveProcessedChats();
+    };
+
     const autoTimers = new Map();
     const chatLastSeen = new Map();
 
@@ -148,7 +173,7 @@
                 autoGreetDelay = config.delay * 1000;
                 break;
             case 'MARK_DONE':
-                processedChats.add(e.data.chatKey);
+                markProcessed(e.data.chatKey);
                 autoTimers.delete(e.data.chatKey);
                 removeWrapper(e.data.chatKey);
                 break;
@@ -257,7 +282,7 @@
         deepQuerySelectorAll('div.conversation').forEach(conv => {
             const chatKey = getChatKey(conv);
             if (chatKey) {
-                processedChats.add(chatKey);
+                markProcessed(chatKey);
                 removeWrapper(chatKey);
             }
         });
@@ -322,7 +347,7 @@
     };
 
     const markAsDoneAndHide = (chatKey, wrapper, greetBtn, broadcast = true) => {
-        processedChats.add(chatKey);
+        markProcessed(chatKey);
         chatLastSeen.set(chatKey, Date.now());
         autoTimers.delete(chatKey);
 
@@ -387,6 +412,7 @@
                     }
 
                     editor.focus();
+                    document.execCommand('selectAll', false, null);
                     document.execCommand('insertText', false, greetingText);
                     editor.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -440,7 +466,7 @@
 
             if (isClosed) {
                 autoTimers.delete(chatKey);
-                processedChats.delete(chatKey);
+                unmarkProcessed(chatKey);
                 chatLastSeen.delete(chatKey);
                 wrapper?.remove();
                 return;
@@ -507,7 +533,7 @@
 
         for (const [key, lastSeen] of chatLastSeen.entries()) {
             if (!currentActiveKeys.has(key) && (now - lastSeen > 15000)) {
-                processedChats.delete(key);
+                unmarkProcessed(key);
                 chatLastSeen.delete(key);
                 autoTimers.delete(key);
             }
