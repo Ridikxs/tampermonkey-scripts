@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopyWithdraws
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Утилита для копирования выводов.
 // @author       Calvin/River/Will
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -258,7 +258,7 @@
 
                 const lines = [];
 
-                lines.push(`ID заявки: ${requestId}`);
+                lines.push(`ID: ${requestId}`);
                 lines.push(`Дата: ${date}`);
                 lines.push(`Сумма: ${amount}`);
                 lines.push(`Платежная система: ${paymentSystem}`);
@@ -313,7 +313,7 @@
                     const lines = [];
 
                     lines.push(
-                        `ID заявки: ${requestId}`
+                        `ID: ${requestId}`
                     );
 
                     lines.push('');
@@ -451,7 +451,7 @@
                     lines.push('');
 
                     lines.push(
-                        `ID заявки: ${requestId}`
+                        `ID: ${requestId}`
                     );
 
                     lines.push('');
