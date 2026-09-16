@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopyWithdraws
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Утилита для копирования выводов.
 // @author       Calvin/River/Will
 // @match        https://www2.fundist.org/ru/Users/Summary*
