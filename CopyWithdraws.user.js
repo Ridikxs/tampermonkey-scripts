@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CopyWithdraws
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Утилита для копирования выводов.
 // @author       Calvin/River/Will
 // @match        https://www2.fundist.org/ru/Users/Summary*
@@ -32,84 +32,129 @@
 (function() {
     'use strict';
 
+
     function getUserInfoFromHeader() {
 
-        const userIdEl = document.querySelector('#SummaryUserId');
-        const userId = userIdEl ? userIdEl.textContent.trim() : '';
+        const userIdEl =
+            document.querySelector('#SummaryUserId');
+
+        const userId =
+            userIdEl
+                ? userIdEl.textContent.trim()
+                : '';
+
 
         let userStatus = ' ';
 
-        const statusesContainer = document.querySelector(
-            '#summary-header > div.fun-page-header__statuses'
-        );
+
+        const statusesContainer =
+            document.querySelector(
+                '#summary-header > div.fun-page-header__statuses'
+            );
+
 
         if (statusesContainer) {
 
-            const nodes = statusesContainer.children;
+            const nodes =
+                statusesContainer.children;
 
             let bestPriority = 0;
             let bestStatus = ' ';
 
+
             for (let i = 0; i < nodes.length; i++) {
 
-                const txt = nodes[i].textContent.trim();
+                const txt =
+                    nodes[i].textContent.trim();
 
                 let prio = 0;
 
+
                 if (txt.toLowerCase() === 'highroll') {
+
                     prio = 5;
+
                 } else if (txt.toLowerCase() === 'vip') {
+
                     prio = 4;
+
                 } else if (txt === 'PreVIP') {
+
                     prio = 3;
+
                 } else if (txt === 'PriVip') {
+
                     prio = 2;
+
                 } else if (txt === 'Privip') {
+
                     prio = 1;
                 }
 
+
                 if (prio > bestPriority) {
+
                     bestPriority = prio;
                     bestStatus = txt;
                 }
             }
 
+
             if (bestPriority > 0) {
+
                 userStatus = bestStatus;
             }
         }
 
+
         let projectName = '';
 
-        const projectNameEl = document.querySelector(
-            '.navbar-default.navbar-static-side .project-name.word-break'
-        );
+
+        const projectNameEl =
+            document.querySelector(
+                '.navbar-default.navbar-static-side .project-name.word-break'
+            );
+
 
         if (projectNameEl) {
-            projectName = projectNameEl.textContent.trim();
+
+            projectName =
+                projectNameEl.textContent.trim();
         }
+
 
         if (!projectName) {
 
-            const currentLoginEl = document.querySelector('#CurrentLogin');
+            const currentLoginEl =
+                document.querySelector('#CurrentLogin');
+
 
             if (currentLoginEl) {
 
                 const dataLogin =
                     currentLoginEl.getAttribute('data-login') || '';
 
+
                 if (dataLogin) {
 
-                    const idx = dataLogin.indexOf('_');
+                    const idx =
+                        dataLogin.indexOf('_');
+
 
                     if (idx > 0) {
-                        projectName = dataLogin.substring(0, idx);
+
+                        projectName =
+                            dataLogin.substring(0, idx);
+
                     } else {
-                        projectName = dataLogin;
+
+                        projectName =
+                            dataLogin;
                     }
                 }
             }
         }
+
 
         return {
             userId,
@@ -119,41 +164,141 @@
     }
 
 
+
+    /*
+     * Определяем платёжную систему.
+     *
+     * KTTT → Kauri
+     * PTTT → Paycos
+     * HTTT → Hgate → Hub
+     * BTTT → Beezyy → Hub
+     */
+
+
     function getPaymentSystemInfo(paymentSystem) {
 
-        const ps = (paymentSystem || '').trim();
+        const ps =
+            (paymentSystem || '').trim();
 
-        if (/^Kauri/i.test(ps)) {
+
+        /*
+         * KTTT = Kauri
+         *
+         * Показываем полное название
+         * платёжного метода.
+         */
+
+        if (/^KTTT\b/i.test(ps)) {
 
             return {
+
                 psTitle: ps,
+
                 showOriginal: false
             };
         }
 
+
+        /*
+         * PTTT = Paycos
+         *
+         * Показываем полное название
+         * платёжного метода.
+         */
+
+        if (/^PTTT\b/i.test(ps)) {
+
+            return {
+
+                psTitle: ps,
+
+                showOriginal: false
+            };
+        }
+
+
+        /*
+         * HTTT = Hgate
+         *
+         * В PS показываем Hub,
+         * оригинальный метод показываем
+         * отдельной строкой.
+         */
+
+        if (/^HTTT\b/i.test(ps)) {
+
+            return {
+
+                psTitle: 'Hub',
+
+                showOriginal: true
+            };
+        }
+
+
+        /*
+         * BTTT = Beezyy
+         *
+         * В PS показываем Hub,
+         * оригинальный метод показываем
+         * отдельной строкой.
+         */
+
+        if (/^BTTT\b/i.test(ps)) {
+
+            return {
+
+                psTitle: 'Hub',
+
+                showOriginal: true
+            };
+        }
+
+
+        /*
+         * Всё остальное → Hub
+         */
+
         return {
+
             psTitle: 'Hub',
+
             showOriginal: true
         };
     }
 
 
+
     function normalizeStatus(status) {
 
-        const s = (status || '').toLowerCase();
+        const s =
+            (status || '').toLowerCase();
 
-        if (s === 'highroll') return 'VIP';
-        if (s === 'vip') return 'VIP';
+
+        if (s === 'highroll') {
+
+            return 'VIP';
+        }
+
+
+        if (s === 'vip') {
+
+            return 'VIP';
+        }
+
 
         if (
             s === 'previp' ||
             s === 'privip'
         ) {
+
             return 'PriVIP';
         }
 
+
         return '';
     }
+
 
 
     function processWithdraws() {
@@ -163,49 +308,78 @@
                 "#LastWithdrawsContainer .table-responsive"
             );
 
-        if (!tableContainer) return;
+
+        if (!tableContainer) {
+
+            return;
+        }
+
 
         const rows =
             tableContainer.querySelectorAll(
                 "[id^='withdraw_row_']"
             );
 
+
         rows.forEach(row => {
 
+
             const idCell =
-                row.querySelector("td.text-left");
+                row.querySelector(
+                    "td.text-left"
+                );
+
 
             const dateCell =
-                row.querySelector("td:nth-child(2)");
+                row.querySelector(
+                    "td:nth-child(2)"
+                );
+
 
             const amountCell =
-                row.querySelector("td:nth-child(3)");
+                row.querySelector(
+                    "td:nth-child(3)"
+                );
+
 
             const paymentSystemCell =
-                row.querySelector("td:nth-child(4)");
+                row.querySelector(
+                    "td:nth-child(4)"
+                );
+
 
             const requisitesCell =
-                row.querySelector("td:nth-child(5)");
+                row.querySelector(
+                    "td:nth-child(5)"
+                );
+
 
             const paymentIdCell =
-                row.querySelector("td:nth-child(7)");
+                row.querySelector(
+                    "td:nth-child(7)"
+                );
 
 
             if (
                 !idCell ||
-                idCell.querySelector('.myIDSpan')
+                idCell.querySelector(
+                    '.myIDSpan'
+                )
             ) {
+
                 return;
             }
 
 
             /*
              * Берём только числовой ID заявки.
-             * Любой дополнительный текст в этой ячейке
-             * игнорируется.
              */
+
             const requestId =
-                idCell.textContent.trim().match(/^\d+/)?.[0] || '';
+                idCell.textContent
+                    .trim()
+                    .match(/^\d+/)
+                    ?.[0] || '';
 
 
             const date =
@@ -213,20 +387,24 @@
                     ? dateCell.textContent.trim()
                     : '';
 
+
             const amount =
                 amountCell
                     ? amountCell.textContent.trim()
                     : '';
+
 
             const paymentSystem =
                 paymentSystemCell
                     ? paymentSystemCell.textContent.trim()
                     : '';
 
+
             const requisites =
                 requisitesCell
                     ? requisitesCell.textContent.trim()
                     : '';
+
 
             const paymentId =
                 paymentIdCell
@@ -234,59 +412,127 @@
                     : '';
 
 
+            /*
+             * Очищаем исходное содержимое ID.
+             */
+
             idCell.textContent = '';
 
 
+
             /*
-             * Кнопка ID
+             * ==========================
+             * КНОПКА ID
+             * ==========================
              */
+
             const idSpan =
                 document.createElement('span');
 
-            idSpan.className = 'myIDSpan';
 
-            idSpan.textContent = requestId;
-
-            idSpan.style.color = '#007bff';
-            idSpan.style.cursor = 'pointer';
-            idSpan.style.fontWeight = 'bold';
-
-            idSpan.title = 'Копировать заявку';
+            idSpan.className =
+                'myIDSpan';
 
 
-            idSpan.addEventListener('click', () => {
+            idSpan.textContent =
+                requestId;
 
-                const lines = [];
 
-                lines.push(`ID: ${requestId}`);
-                lines.push(`Дата: ${date}`);
-                lines.push(`Сумма: ${amount}`);
-                lines.push(`Платежная система: ${paymentSystem}`);
-                lines.push(`Реквизиты: ${requisites}`);
-                lines.push(`ID платежа: ${paymentId}`);
+            idSpan.style.color =
+                '#007bff';
 
-                GM_setClipboard(
-                    lines.join('\n').trim()
-                );
-            });
+
+            idSpan.style.cursor =
+                'pointer';
+
+
+            idSpan.style.fontWeight =
+                'bold';
+
+
+            idSpan.title =
+                'Копировать заявку';
+
+
+
+            idSpan.addEventListener(
+                'click',
+                () => {
+
+                    const lines = [];
+
+
+                    lines.push(
+                        `ID: ${requestId}`
+                    );
+
+
+                    lines.push(
+                        `Дата: ${date}`
+                    );
+
+
+                    lines.push(
+                        `Сумма: ${amount}`
+                    );
+
+
+                    lines.push(
+                        `Платежная система: ${paymentSystem}`
+                    );
+
+
+                    lines.push(
+                        `Реквизиты: ${requisites}`
+                    );
+
+
+                    lines.push(
+                        `ID платежа: ${paymentId}`
+                    );
+
+
+                    GM_setClipboard(
+                        lines.join('\n').trim()
+                    );
+                }
+            );
+
 
 
             /*
-             * 🤖 Робот
+             * ==========================
+             * 🤖 РОБОТ
+             * ==========================
              */
+
             const robotSpan =
                 document.createElement('span');
 
-            robotSpan.className = 'myRobotSpan';
 
-            robotSpan.textContent = ' 🤖';
+            robotSpan.className =
+                'myRobotSpan';
 
-            robotSpan.style.color = '#28a745';
-            robotSpan.style.cursor = 'pointer';
-            robotSpan.style.fontWeight = 'bold';
+
+            robotSpan.textContent =
+                ' 🤖';
+
+
+            robotSpan.style.color =
+                '#28a745';
+
+
+            robotSpan.style.cursor =
+                'pointer';
+
+
+            robotSpan.style.fontWeight =
+                'bold';
+
 
             robotSpan.title =
                 'Копировать заявку (структурно)';
+
 
 
             robotSpan.addEventListener(
@@ -295,14 +541,20 @@
 
                     e.stopPropagation();
 
+
                     const {
                         userId,
                         userStatus,
                         projectName
-                    } = getUserInfoFromHeader();
+                    } =
+                        getUserInfoFromHeader();
+
 
                     const status =
-                        normalizeStatus(userStatus);
+                        normalizeStatus(
+                            userStatus
+                        );
+
 
                     const ps =
                         getPaymentSystemInfo(
@@ -312,23 +564,37 @@
 
                     const lines = [];
 
+
                     lines.push(
                         `ID: ${requestId}`
                     );
 
-                    lines.push('');
-
-                    lines.push('Выписка:');
 
                     lines.push('');
+
+
+                    /*
+                     * Теперь просто "Выписка"
+                     */
+
+                    lines.push(
+                        'Выписка'
+                    );
+
+
+                    lines.push('');
+
 
                     lines.push(
                         `PS: ${ps.psTitle}`
                     );
 
-                    lines.push('');
 
                     lines.push('');
+
+
+                    lines.push('');
+
 
                     lines.push(
                         `ID клиента: ${userId}`
@@ -351,14 +617,25 @@
 
                     lines.push('');
 
+
                     lines.push(
                         `Дата: ${date}`
                     );
+
 
                     lines.push(
                         `Сумма: ${amount}`
                     );
 
+
+                    /*
+                     * Для Hub показываем
+                     * оригинальное название.
+                     *
+                     * Для KTTT/PTTT не показываем,
+                     * потому что полное название
+                     * уже находится в PS.
+                     */
 
                     if (ps.showOriginal) {
 
@@ -372,7 +649,9 @@
                         `Реквизиты: ${requisites}`
                     );
 
+
                     lines.push('');
+
 
                     lines.push(
                         'Доп. информация:'
@@ -386,23 +665,40 @@
             );
 
 
+
             /*
-             * Новая кнопка — обычное копирование
+             * ==========================
+             * 📋 ОБЫЧНОЕ КОПИРОВАНИЕ
+             * ==========================
              */
+
             const normalSpan =
                 document.createElement('span');
+
 
             normalSpan.className =
                 'myNormalSpan';
 
-            normalSpan.textContent = ' 📋';
 
-            normalSpan.style.color = '#6f42c1';
-            normalSpan.style.cursor = 'pointer';
-            normalSpan.style.fontWeight = 'bold';
+            normalSpan.textContent =
+                ' 📋';
+
+
+            normalSpan.style.color =
+                '#6f42c1';
+
+
+            normalSpan.style.cursor =
+                'pointer';
+
+
+            normalSpan.style.fontWeight =
+                'bold';
+
 
             normalSpan.title =
                 'Копировать платеж';
+
 
 
             normalSpan.addEventListener(
@@ -416,23 +712,31 @@
                         userId,
                         userStatus,
                         projectName
-                    } = getUserInfoFromHeader();
+                    } =
+                        getUserInfoFromHeader();
 
 
                     const status =
-                        normalizeStatus(userStatus);
+                        normalizeStatus(
+                            userStatus
+                        );
 
 
                     const lines = [];
 
 
                     /*
-                     * Данные клиента
+                     * CLIENT ID
                      */
+
                     lines.push(
                         userId
                     );
 
+
+                    /*
+                     * VIP PROJECT
+                     */
 
                     if (status) {
 
@@ -450,27 +754,34 @@
 
                     lines.push('');
 
+
                     lines.push(
                         `ID: ${requestId}`
                     );
 
+
                     lines.push('');
+
 
                     lines.push(
                         `Дата: ${date}`
                     );
 
+
                     lines.push(
                         `Сумма: ${amount}`
                     );
+
 
                     lines.push(
                         `Платежная система: ${paymentSystem}`
                     );
 
+
                     lines.push(
                         `Реквизиты: ${requisites}`
                     );
+
 
                     lines.push(
                         `ID платежа: ${paymentId}`
@@ -484,17 +795,30 @@
             );
 
 
+
             /*
-             * Размещаем все три элемента рядом:
-             *
-             * 327315712 🤖 📋
+             * ==========================
+             * ДОБАВЛЯЕМ КНОПКИ
+             * ==========================
              */
-            idCell.appendChild(idSpan);
-            idCell.appendChild(robotSpan);
-            idCell.appendChild(normalSpan);
+
+            idCell.appendChild(
+                idSpan
+            );
+
+
+            idCell.appendChild(
+                robotSpan
+            );
+
+
+            idCell.appendChild(
+                normalSpan
+            );
 
         });
     }
+
 
 
     function waitForElement(
@@ -503,22 +827,32 @@
     ) {
 
         const interval =
-            setInterval(() => {
+            setInterval(
+                () => {
 
-                const element =
-                    document.querySelector(
-                        selector
-                    );
+                    const element =
+                        document.querySelector(
+                            selector
+                        );
 
-                if (element) {
 
-                    clearInterval(interval);
+                    if (element) {
 
-                    callback(element);
-                }
+                        clearInterval(
+                            interval
+                        );
 
-            }, 300);
+
+                        callback(
+                            element
+                        );
+                    }
+
+                },
+                300
+            );
     }
+
 
 
     window.addEventListener(
@@ -538,26 +872,35 @@
     );
 
 
+
     function observeBodyChanges() {
 
         let timer = null;
 
 
         const observer =
-            new MutationObserver(() => {
+            new MutationObserver(
+                () => {
 
-                if (timer) {
-                    clearTimeout(timer);
+                    if (timer) {
+
+                        clearTimeout(
+                            timer
+                        );
+                    }
+
+
+                    timer =
+                        setTimeout(
+                            () => {
+
+                                processWithdraws();
+
+                            },
+                            200
+                        );
                 }
-
-
-                timer =
-                    setTimeout(() => {
-
-                        processWithdraws();
-
-                    }, 200);
-            });
+            );
 
 
         observer.observe(
