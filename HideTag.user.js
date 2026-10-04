@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HideTag
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.1
 // @description  Скрывает дополнительные теги без поломки DOM. Поддержка старых Sales_SUPP и новых Sales_Support и остальные теги. Сохраняет оригинальные цвета тегов.
 // @author       Calvin/River
 // @match        https://*.fundist.org/ru/Users/Summary*
