@@ -99,6 +99,7 @@
         "Anna Sh_v2",
         "Nekontakt_v2",
         "Piotr_v2",
+        "Georgi_v2",
 
         // ===== Старые SUPP (NEW v2.8) =====
 
