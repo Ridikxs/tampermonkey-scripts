@@ -1,8 +1,7 @@
-
 // ==UserScript==
 // @name         Operator Load
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Live-мониторинг открытых чатов операторов через API Chatwoot.
 // @author       Will
 // @match        https://sparkmoth.com/*
@@ -20,7 +19,8 @@
         refreshInterval: 2000,
         agentsInterval: 60000,
         requestTimeout: 8000,
-        panelId: 'will-operator-load-panel'
+        panelId: 'will-operator-load-panel',
+        visibleLimit: 5
     };
 
     const API = {
@@ -37,6 +37,7 @@
     let busy = false;
     let nextAgentsRefresh = 0;
     let lastSuccess = 0;
+    let expanded = false;
 
     // =====================================================
     // CSS
@@ -137,6 +138,10 @@
             user-select: none;
         }
 
+        #${CONFIG.panelId} .ol-card.ol-hidden {
+            display: none !important;
+        }
+
         #${CONFIG.panelId} .ol-card:hover {
             border-color: #60a5fa;
 
@@ -203,6 +208,50 @@
         #${CONFIG.panelId} .ol-high .ol-count {
             color: #dc2626;
             background: rgba(239,68,68,.17);
+        }
+
+        /* SHOW MORE */
+
+        #${CONFIG.panelId} .ol-toggle-wrap {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #${CONFIG.panelId} .ol-toggle {
+            display: none;
+
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+
+            width: 100%;
+
+            padding: 5px 8px;
+
+            border: 0;
+            border-radius: 6px;
+
+            background: rgba(59,130,246,.08);
+
+            color: #3b82f6;
+
+            font-size: 10px;
+            font-weight: 700;
+
+            cursor: pointer;
+
+            transition:
+                background-color .15s ease,
+                color .15s ease;
+        }
+
+        #${CONFIG.panelId} .ol-toggle:hover {
+            background: rgba(59,130,246,.15);
+        }
+
+        #${CONFIG.panelId} .ol-toggle.ol-visible {
+            display: inline-flex;
         }
 
         /* FLOATING CHANGE INDICATOR */
@@ -342,6 +391,17 @@
             color: #f87171;
         }
 
+        .dark #${CONFIG.panelId} .ol-toggle,
+        [data-theme="dark"] #${CONFIG.panelId} .ol-toggle {
+            background: rgba(96,165,250,.10);
+            color: #60a5fa;
+        }
+
+        .dark #${CONFIG.panelId} .ol-toggle:hover,
+        [data-theme="dark"] #${CONFIG.panelId} .ol-toggle:hover {
+            background: rgba(96,165,250,.18);
+        }
+
         @media (prefers-reduced-motion: reduce) {
             #${CONFIG.panelId} *,
             #${CONFIG.panelId} *::before,
@@ -391,9 +451,6 @@
         if (!accessToken || !client || !uid) {
             throw new Error('SESSION_HEADERS_MISSING');
         }
-
-        // Не сохраняем и не логируем секреты.
-        // Читаем актуальную cookie при каждом API-запросе.
 
         return {
             'access-token': String(accessToken),
@@ -500,8 +557,6 @@
         nextAgentsRefresh =
             Date.now() + CONFIG.agentsInterval;
 
-        // Актуализируем имена существующих карточек.
-
         for (const [id, card] of cards) {
 
             const name = names.get(id);
@@ -592,9 +647,29 @@
             const grid = document.createElement('div');
             grid.className = 'ol-grid';
 
-            current.append(top, grid);
+            const toggleWrap = document.createElement('div');
+            toggleWrap.className = 'ol-toggle-wrap';
 
-            // Vue мог уничтожить предыдущую панель.
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'ol-toggle';
+            toggle.textContent = 'Показать ещё';
+
+            toggle.addEventListener('click', () => {
+
+                expanded = !expanded;
+
+                applyCollapseState();
+
+            });
+
+            toggleWrap.appendChild(toggle);
+
+            current.append(
+                top,
+                grid,
+                toggleWrap
+            );
 
             cards.clear();
         }
@@ -695,8 +770,6 @@
         const element = card.element;
         const count = card.countElement;
 
-        // Не накладываем несколько старых индикаторов.
-
         element.querySelectorAll('.ol-change')
             .forEach(node => node.remove());
 
@@ -714,8 +787,6 @@
 
         count.classList.remove('count-pop');
         element.classList.remove('chat-added');
-
-        // Перезапуск CSS-анимации.
 
         void count.offsetWidth;
 
@@ -748,8 +819,6 @@
     function updateCard(operator) {
 
         let card = cards.get(operator.id);
-
-        // Первый показ без ложного +N.
 
         if (!card) {
             return createCard(operator);
@@ -788,6 +857,67 @@
     }
 
     // =====================================================
+    // COLLAPSE / EXPAND
+    // =====================================================
+
+    function applyCollapseState(total = latestMetrics.length) {
+
+        const current = document.getElementById(
+            CONFIG.panelId
+        );
+
+        if (!current) return;
+
+        const grid = current.querySelector('.ol-grid');
+        const toggle = current.querySelector('.ol-toggle');
+
+        if (!grid || !toggle) return;
+
+        const cardElements = [
+            ...grid.querySelectorAll('.ol-card')
+        ];
+
+        const hasExtra =
+            total > CONFIG.visibleLimit;
+
+        cardElements.forEach((card, index) => {
+
+            const shouldHide =
+                !expanded &&
+                index >= CONFIG.visibleLimit;
+
+            card.classList.toggle(
+                'ol-hidden',
+                shouldHide
+            );
+        });
+
+        toggle.classList.toggle(
+            'ol-visible',
+            hasExtra
+        );
+
+        if (!hasExtra) {
+
+            expanded = false;
+
+            toggle.textContent = 'Показать ещё';
+
+            return;
+        }
+
+        const hiddenCount =
+            Math.max(
+                0,
+                total - CONFIG.visibleLimit
+            );
+
+        toggle.textContent = expanded
+            ? 'Скрыть'
+            : `Показать ещё · ${hiddenCount}`;
+    }
+
+    // =====================================================
     // RENDER
     // =====================================================
 
@@ -812,8 +942,6 @@
             sorted.map(item => item.id)
         );
 
-        // Удаляем отсутствующих в текущей статистике.
-
         for (const [id, card] of cards) {
 
             if (!activeIds.has(id)) {
@@ -835,9 +963,6 @@
                 `Открыто: ${operator.count}\n` +
                 `Без ответа: ${operator.unattended}`;
 
-            // Перемещаем карточку только если порядок
-            // действительно изменился.
-
             if (grid.children[index] !== card.element) {
 
                 grid.insertBefore(
@@ -846,6 +971,8 @@
                 );
             }
         });
+
+        applyCollapseState(sorted.length);
     }
 
     // =====================================================
@@ -859,8 +986,6 @@
         busy = true;
 
         try {
-
-            // Список имён обновляется отдельно.
 
             if (
                 !names.size ||
@@ -878,13 +1003,10 @@
                         error.message
                     );
 
-                    // Повторная попытка через 15 секунд.
-
-                    nextAgentsRefresh = Date.now() + 15000;
+                    nextAgentsRefresh =
+                        Date.now() + 15000;
                 }
             }
-
-            // Получаем текущие открытые чаты.
 
             const metrics = await loadMetrics();
 
@@ -915,9 +1037,6 @@
                     ? 'Ожидание авторизации'
                     : 'Ошибка обновления'
             );
-
-            // При ошибке последние показатели остаются.
-            // LIVE больше не показываем.
 
         } finally {
 
@@ -954,6 +1073,7 @@
                     Date.now() - lastSuccess < 10000
                         ? 'live'
                         : 'loading',
+
                     lastSuccess &&
                     Date.now() - lastSuccess < 10000
                         ? 'LIVE · 2 сек'
@@ -966,8 +1086,6 @@
     const observer = new MutationObserver(mutations => {
 
         const relevant = mutations.some(mutation => {
-
-            // Изменения нашего интерфейса пропускаем.
 
             const target = mutation.target;
 
@@ -1022,7 +1140,7 @@
     );
 
     console.log(
-        '%c[Will] Operator Load v1.3 initialized',
+        '%c[Will] Operator Load v1.4 initialized',
         'color:#22c55e;font-weight:bold'
     );
 
