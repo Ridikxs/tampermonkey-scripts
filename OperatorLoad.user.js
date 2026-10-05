@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Operator Load
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Live-мониторинг открытых чатов операторов через API Chatwoot.
 // @author       Will
 // @match        https://sparkmoth.com/*
@@ -20,7 +20,7 @@
         agentsInterval: 60000,
         requestTimeout: 8000,
         panelId: 'will-operator-load-panel',
-        visibleLimit: 5
+        visibleLimit: 4
     };
 
     const API = {
