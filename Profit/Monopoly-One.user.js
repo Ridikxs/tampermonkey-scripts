@@ -6,6 +6,8 @@
 // @match        https://monopoly-one.com/table*
 // @grant        none
 // @run-at       document-idle
+// @updateURL https://github.com/Ridikxs/tampermonkey-scripts/raw/refs/heads/main/Profit/Monopoly-One.user.js
+// @downloadURL https://github.com/Ridikxs/tampermonkey-scripts/raw/refs/heads/main/Profit/Monopoly-One.user.js
 // ==/UserScript==
 
 (function () {
