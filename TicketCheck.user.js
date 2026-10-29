@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Тикеты клиента (plevantis)
+// @name         Chatwoot Tickets
 // @namespace    billy.ticket-check
-// @version      1.1
+// @version      1.2
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TicketCheck.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TicketCheck.user.js
-// @description  Показывает тикеты клиента из чата Сhatwoot
+// @description  Кнопка у почты клиента в чате: показывает его тикеты из plevantis
 // @match        https://sparkmoth.com/app/*
 // @connect      plevantis.net
 // @grant        GM_xmlhttpRequest
