@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.3
-// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/vip-schedule.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/vip-schedule.user.js
+// @version      1.4
+// @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
+// @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте
 // @match        https://sparkmoth.com/app/*
 // @grant        GM_getValue
@@ -232,7 +232,7 @@
 
     $('.time').innerHTML = `${pad(kp.h)}:${pad(kp.m)}<span class="sec">${pad(kp.s)}</span>`;
     const weekend = kp.dow === 0 || kp.dow === 6;
-    $('.date').innerHTML = `${L.kyiv}, <b>${L.days[kp.dow]}</b> ${kp.day} ${L.months[kp.month - 1]}${weekend ? ` (${L.weekend})` : ''}`;
+    $('.date').innerHTML = `${L.kyiv}, <b>${L.days[kp.dow]}</b> ${kp.day} ${L.months[kp.month - 1]}`;
     $('.msk-label').textContent = L.moscow;
     root.querySelectorAll('.lang button').forEach((b) => b.classList.toggle('on', b.dataset.lang === lang));
     $('.msk-time').textContent = `${pad(mp.h)}:${pad(mp.m)}`;
