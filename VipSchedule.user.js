@@ -1,11 +1,14 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.4
+// @version      1.7
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
-// @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте
+// @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
 // @match        https://sparkmoth.com/app/*
+// @match        https://teams.microsoft.com/*
+// @match        https://teams.cloud.microsoft/*
+// @match        https://teams.live.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
@@ -30,7 +33,153 @@
   ];
   // За скільки хвилин до кінця зміни показувати «скоро кінець»
   const SOON_MINUTES = 30;
+  // Teams: частина назви чату, звідки беремо «не кидать / можно кидать» (вкладка Teams у браузері має бути відкрита)
+  const TEAMS_CHAT = 'Breaks';
+  const TEAMS_FRESH_MIN = 5;
   // =====================================================================
+
+  // ===== ЧАСТИНА ДЛЯ TEAMS: читає чат «Менеджеры | Breaks» і передає стопи плашці графіка =====
+  const SCHEDULE = Object.fromEntries(PROJECTS.map((p) => [p.name, { weekday: p.weekday, weekend: p.weekend }]));
+  const KEYS = Object.keys(SCHEDULE);
+  // ---------- розбір повідомлень з Teams ----------
+  // назви проєктів, як їх пишуть у чаті
+  const TEAMS_ALIASES = [
+    ['CAT', 'кот|коты|котов|котах|коти|котики|кэт|кэты|cat'],
+    ['GAMA', 'гама|гамы|гамма|гаммы|gama'],
+    ['KOMETA', 'комета|кометы|комету|комете|kometa'],
+    ['R7', 'р7|r7|р-7'],
+    ['DADDY', 'деди|дедди|дэдди|дэди|дедди|daddy'],
+    ['KENT', 'кент|kent'],
+    ['ARKADA', 'аркада|аркады|аркаду|arkada'],
+    ['Reactivation', 'реактив\\S*|реакт|reactiv\\S*'],
+  ];
+  const ALIAS_RES = TEAMS_ALIASES.map(([k, a]) => [k, new RegExp(`(^|[^а-яёa-z0-9])(${a})(?=$|[^а-яёa-z0-9])`, 'i')]);
+  const ALL_RE = /(^|[^а-яё])(все\s+проект\S*|всех|всё|все\s+чаты)(?=$|[^а-яё])/i;
+  const NEG_RE = /(не\s+(кид|перевод|перевед|скид|переда|кида|отправля)\S*|временно\s+не|пока\s+не|\bстоп\b)/i;
+  const POS_RE = /((можно|можем|можете)\s+(уже\s+|снова\s+|опять\s+)?(кид|перевод|скид|переда|отправля)\S*|(кид|перевод|скид)\S*\s+можно|снова\s+(кид|перевод)\S*|можно\s*$)/i;
+  // Київська хвилина доби для моменту ts
+  function kyivMinOf(ts) {
+    const p = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Kyiv', hour12: false, hour: '2-digit', minute: '2-digit', weekday: 'short' }).formatToParts(new Date(ts)).forEach((x) => { p[x.type] = x.value; });
+    let h = +p.hour; if (h === 24) h = 0;
+    return { min: h * 60 + +p.minute, dow: { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[p.weekday] };
+  }
+  // північ за Києвом після моменту ts: новий день — стопи з минулого дня вже не діють
+  const kyivMidnightAfter = (ts) => ts + (1440 - kyivMinOf(ts).min) * 60000;
+  // кінець зміни проєкту в той день, коли написали повідомлення (для «временно», «пока что» без часу)
+  function shiftEndAfter(key, ts) {
+    const sc = SCHEDULE[key] || SCHEDULE.GAMA;
+    const k = kyivMinOf(ts);
+    const r = (k.dow === 0 || k.dow === 6) ? sc.weekend : sc.weekday;
+    const [h, m] = r[1].split(':').map(Number);
+    let d = h * 60 + m - k.min;
+    if (d <= 0) d += 1440;   // написали після кінця зміни — до кінця завтрашньої
+    return ts + d * 60000;
+  }
+  // до якого часу стоп: «до 16:15 / 16.15 / 16 15 / 14» (Київ), «30 минут», «полчаса», «час», «2 часа»
+  function untilOf(text, ts, key) {
+    const t = text.toLowerCase();
+    const at = t.match(/до\s+(\d{1,2})(?:\s*[:.\s]\s*(\d{2}))?(?!\d)/);
+    if (at && +at[1] <= 23 && (!at[2] || +at[2] <= 59)) {
+      let d = (+at[1] * 60 + +(at[2] || 0)) - kyivMinOf(ts).min;
+      if (d <= 0) d += 1440;
+      return ts + d * 60000;
+    }
+    const mins = t.match(/(\d{1,3})\s*(мин|минут|м\b)/);
+    if (mins) return ts + +mins[1] * 60000;
+    if (/полчаса|пол\s+часа/.test(t)) return ts + 30 * 60000;
+    const hrs = t.match(/(\d{1,2})\s*(час|ч\b)/);
+    if (hrs) return ts + +hrs[1] * 3600000;
+    if (/(^|\s)час(а|ик)?(\s|$)/.test(t)) return ts + 3600000;
+    return shiftEndAfter(key, ts);
+  }
+  // у повідомленні вказано, до якого часу / на скільки («до 16:15», «30 минут», «час»)? Інакше — «пока что»
+  const hasExplicitTime = (text) => { const t = String(text || '').toLowerCase(); const at = t.match(/до\s+(\d{1,2})(?:\s*[:.\s]\s*(\d{2}))?(?!\d)/); return !!(at && +at[1] <= 23) || /(\d{1,3})\s*(мин|минут|м\b)|полчаса|пол\s+часа|(\d{1,2})\s*(час|ч\b)|(^|\s)час(а|ик)?(\s|$)/.test(t); };
+  // повідомлення по порядку → { stops: {KEY: {until, at, text}}, clears: {KEY: at} }
+  function parseTeams(msgs) {
+    const stops = {}, clears = {};
+    for (const m of msgs.slice().sort((a, b) => a.at - b.at)) {
+      const clauses = m.text.split(/[;!?\n]|,\s|\.\s|\s+а\s+|\s+но\s+/i).map((x) => x.trim()).filter(Boolean);
+      let carry = [];
+      for (const c of clauses) {
+        let keys = ALIAS_RES.filter(([, re]) => re.test(c)).map(([k]) => k);
+        // «все проекты» — це VIP-менеджери проєктів; Reactivation — окремі менеджери, їх зупиняє тільки «реактив…»
+        if (!keys.length && ALL_RE.test(c)) keys = KEYS.filter((k) => k !== 'Reactivation');
+        if (!keys.length) keys = carry;
+        if (!keys.length) continue;
+        carry = keys;
+        const neg = NEG_RE.test(c), pos = POS_RE.test(c);
+        if (pos && !neg) keys.forEach((k) => { delete stops[k]; clears[k] = m.at; });
+        // стоп діє максимум до кінця зміни: наступна зміна починається «з чистого аркуша»
+        // новий день = усі працюють, поки знову не напишуть «не кидать»: стоп не переходить через північ (Київ)
+        else if (neg) keys.forEach((k) => { stops[k] = { until: Math.min(untilOf(c, m.at, k), shiftEndAfter(k, m.at), kyivMidnightAfter(m.at)), at: m.at, text: m.text.slice(0, 120), explicit: hasExplicitTime(c) }; delete clears[k]; });
+      }
+    }
+    return { stops, clears };
+  }
+
+  // ---------- читання чату в Teams (вкладка в браузері) ----------
+  function teamsReader() {
+    const badge = document.createElement('div');
+    badge.style.cssText = 'position:fixed;left:12px;bottom:52px;z-index:2147483647;max-width:520px;padding:6px 10px;border-radius:10px;font:600 12px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none;';
+    const paint = (ok, text) => {
+      if (!badge.isConnected && document.body) document.body.appendChild(badge);
+      badge.style.background = ok ? '#1E4636' : '#4A3917';
+      badge.style.color = ok ? '#5FD39D' : '#F2B544';
+      badge.textContent = `🕒 График · ${text}`;
+    };
+    const chatOpen = () => {
+      const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+        const v = n.nodeValue.trim();
+        if (v.length < 60 && v.includes(TEAMS_CHAT) && n.parentElement && n.parentElement.getBoundingClientRect().top < 220 && n.parentElement.getBoundingClientRect().left > 250) return true;
+      }
+      return false;
+    };
+    // повідомлення: кожен <time datetime> — це час одного повідомлення; беремо найближчий блок навколо нього
+    const readMsgs = () => {
+      const out = [];
+      const seen = new Set();
+      for (const tm of document.querySelectorAll('time[datetime]')) {
+        const at = Date.parse(tm.getAttribute('datetime'));
+        if (!at || Date.now() - at > 36 * 3600000) continue;
+        // блок саме ЦЬОГО повідомлення: найвищий предок, у якому тільки один час (інакше текст береться з сусіднього, старішого повідомлення)
+        let box = tm.closest('[data-tid="chat-pane-message"], [data-tid="chat-pane-item"]');
+        if (!box || box.querySelectorAll('time[datetime]').length !== 1) {
+          box = tm.parentElement;
+          while (box && box.parentElement && box.parentElement.querySelectorAll('time[datetime]').length === 1) box = box.parentElement;
+        }
+        if (!box || seen.has(box)) continue;
+        seen.add(box);
+        const body = box.querySelector('[data-tid="chat-pane-message"] [id^="content-"], [id^="content-"], [data-tid="message-body-content"], [data-tid="message-body"]') || box;
+        const clone = body.cloneNode(true);
+        // цитата («відповісти на повідомлення»), ім'я автора, час, реакції — не текст повідомлення
+        clone.querySelectorAll('blockquote, [data-tid*="quote" i], [class*="quote" i], [data-tid*="author" i], [data-tid*="reaction" i], [data-tid*="divider" i], [role="separator"], time, button').forEach((x) => x.remove());
+        // службові написи Teams (роздільник непрочитаних, «Изменено» тощо) — не текст повідомлення
+        const text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ')
+          .replace(/(не\s*прочитан\S*(\s+сообщени\S*)?|последнее\s+прочитанное|новые\s+сообщения|изменено|edited|unread\s+messages?|new\s+messages?)/gi, ' ')
+          .replace(/\s+/g, ' ').trim();
+        if (text) out.push({ at, text: text.slice(0, 300) });
+      }
+      return out;
+    };
+    const tick = () => {
+      if (!document.body) return;
+      if (!chatOpen()) { paint(false, `открой чат «…${TEAMS_CHAT}» — тогда читаю стопы`); GM_setValue('vsTeams', { at: Date.now(), ok: false, why: 'чат не открыт' }); return; }
+      const msgs = readMsgs();
+      const { stops, clears } = parseTeams(msgs);
+      const now = Date.now();
+      for (const k of Object.keys(stops)) if (stops[k].until <= now) delete stops[k];
+      GM_setValue('vsTeams', { at: now, ok: true, n: msgs.length, stops, clears, last: msgs.slice(-5) });
+      // без часу в повідомленні («временно», «пока что») — просто назва проєкту, без «до 23:00»
+      const list = Object.entries(stops).map(([k, v]) => { if (v.explicit === false) return k; const d = new Date(v.until); return `${k} до ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; });
+      paint(true, `читаю «${TEAMS_CHAT}» (${msgs.length} сообщ.) · ${list.length ? `не переводить: ${list.join(', ')}` : 'стопов нет'}`);
+    };
+    setInterval(tick, 5000);
+    setTimeout(tick, 2500);
+  }
+
+  if (/teams\.(microsoft\.com|cloud\.microsoft|live\.com)$/.test(location.hostname)) { teamsReader(); return; }
 
   const KYIV_TZ = (() => {
     try { new Intl.DateTimeFormat('en', { timeZone: 'Europe/Kyiv' }); return 'Europe/Kyiv'; }
@@ -161,12 +310,13 @@
   .msk-label, .msk-diff { font-size: 11px; color: var(--muted); }
   .msk-time { font-size: 19px; font-weight: 600; line-height: 1.2; }
 
-  .summary { padding: 9px 12px; border-radius: 10px; font-weight: 600; font-size: 13.5px; margin-bottom: 10px; }
+  .summary { padding: 7px 11px; border-radius: 10px; font-weight: 600; font-size: 13px; margin-bottom: 10px; }
   .summary.ok { background: var(--open-soft); color: var(--open); }
   .summary.bad { background: var(--closed-soft); color: var(--closed); }
-  .summary small { display: block; font-weight: 400; font-size: 12px; color: var(--ink); opacity: .75; margin-top: 2px; }
+  .summary small { display: block; font-weight: 400; font-size: 11.5px; color: var(--ink); opacity: .7; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  .axis, .row { display: grid; grid-template-columns: 108px 1fr 86px; gap: 10px; align-items: center; }
+  .axis, .row { display: grid; grid-template-columns: 150px 1fr 74px; gap: 10px; align-items: center; }
+  .row > div:first-child { min-width: 0; }
   .axis { padding: 0 10px 4px; }
   .scale { position: relative; height: 12px; }
   .scale i { position: absolute; transform: translateX(-50%); font-style: normal; font-size: 10px; color: var(--muted); }
@@ -174,7 +324,7 @@
   .row { padding: 8px 10px; border-top: 1px solid var(--line); }
   .row:first-child { border-top: 0; }
   .name { font-weight: 650; font-size: 13px; }
-  .sub { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { position: relative; height: 12px; border-radius: 4px; background: var(--track); }
   .work { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--closed-soft); }
   .row.open .work { background: var(--open); } .row.soon .work { background: var(--soon); }
@@ -212,10 +362,38 @@
   const $ = (s) => root.querySelector(s);
   const pill = $('.pill'), panel = $('.panel');
 
+  // стопи з Teams («не кидать / не переводить») — їх читає скрипт «Бездеп» з вкладки Teams і ділиться через localStorage
+  function teamsStops() {
+    const now = Date.now();
+    const out = { live: false, stops: {} };
+    // 1) власне читання Teams (цей же скрипт у вкладці Teams)
+    const t = GM_getValue('vsTeams', null);
+    if (t && t.ok && now - t.at < TEAMS_FRESH_MIN * 60000) {
+      out.live = true;
+      for (const [k, v] of Object.entries(t.stops || {})) if (v.until > now) out.stops[k] = { until: v.until, text: v.text, src: 'teams', explicit: v.explicit !== false };
+    }
+    // 2) якщо стоїть і «Бездеп» — беремо його стопи теж (там можуть бути ручні)
+    try {
+      const n = JSON.parse(localStorage.getItem('ndStopsShared') || 'null');
+      if (n && now - n.at < 60000) {
+        if (n.live) out.live = true;
+        for (const [k, v] of Object.entries(n.stops || {})) if (v.until > now && !out.stops[k]) out.stops[k] = v;
+      }
+    } catch (e) { /* */ }
+    return out;
+  }
+  const hmLocal = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   function render() {
     const now = new Date();
     const kp = zoneParts(now, KYIV_TZ), mp = zoneParts(now, MSK_TZ);
-    const rows = PROJECTS.map((p) => ({ p, st: statusOf(p, kp) }));
+    const ts = teamsStops();
+    const rows = PROJECTS.map((p) => {
+      const st = statusOf(p, kp);
+      const sp = ts.stops[p.name];
+      // працюють за графіком, але в Teams написали «не переводить» — зараз переводити не можна
+      if (st.state === 'open' && sp && sp.until > Date.now()) return { p, st: { ...st, state: 'stop', stopUntil: sp.until, stopText: sp.text || '', stopSrc: sp.src, stopExplicit: sp.explicit !== false } };
+      return { p, st };
+    });
     const open = rows.filter((r) => r.st.state === 'open');
     const total = rows.length;
     const L = T();
@@ -242,22 +420,31 @@
     $('.msk-diff').textContent = dh === 0 ? L.sameAsKyiv : `${dh > 0 ? '+' : '−'}${Math.abs(dh)} ${L.fromKyiv}`;
 
     const summary = $('.summary');
+    const stopped = rows.filter((r) => r.st.state === 'stop');
+    // коротко: хто на стопі з Teams; про Teams пишемо тільки якщо він НЕ читається
+    const stopTxt = stopped.length ? `Стоп: ${stopped.map((r) => `${r.p.name}${r.st.stopExplicit ? ` до ${hmLocal(r.st.stopUntil)}` : ''}`).join(', ')}` : '';
     if (open.length) {
       summary.className = 'summary ok';
-      const closed = rows.filter((r) => r.st.state !== 'open').map((r) => r.p.name);
-      summary.innerHTML = open.length === total
-        ? `${L.allOpen}<small>${L.onPlace}: ${total} ${L.of} ${total}</small>`
-        : `${L.someOpen}: ${open.length} ${L.of} ${total}<small>${L.closedList}: ${closed.join(', ')}</small>`;
+      const closed = rows.filter((r) => r.st.state === 'closed').map((r) => r.p.name);
+      const info = [closed.length ? `${L.closedList}: ${closed.join(', ')}` : '', stopTxt, ts.live ? '' : '🟡 Teams не читается'].filter(Boolean).join(' · ');
+      summary.innerHTML = `${open.length === total ? L.allOpen : `${L.someOpen}: ${open.length} ${L.of} ${total}`}${info ? `<small title="${info.replace(/"/g, '&quot;')}">${info}</small>` : ''}`;
     } else {
       const next = rows.slice().sort((a, b) => a.st.minsUntil - b.st.minsUntil)[0];
       summary.className = 'summary bad';
-      summary.innerHTML = `${L.noneOpen}<small>${L.nearest}: ${next.p.name} ${next.st.tomorrow ? L.tomorrow + ' ' : ''}${L.at} ${hhmm(next.st.opensAt)}, ${L.in} ${dur(next.st.minsUntil)}</small>`;
+      const info = [stopTxt, ts.live ? '' : '🟡 Teams не читается'].filter(Boolean).join(' · ');
+      summary.innerHTML = stopped.length && !rows.some((r) => r.st.state === 'closed' && r.st.minsUntil < 600)
+        ? `${L.noneOpen}${info ? `<small>${info}</small>` : ''}`
+        : `${L.noneOpen}<small>${L.nearest}: ${next.p.name} ${next.st.tomorrow ? L.tomorrow + ' ' : ''}${L.at} ${hhmm(next.st.opensAt)}, ${L.in} ${dur(next.st.minsUntil)}${info ? ` · ${info}` : ''}</small>`;
     }
 
     const nowPos = (kp.h * 60 + kp.m + kp.s / 60) / 14.4;
     $('.list').innerHTML = rows.map(({ p, st }) => {
       let cls, sub, tag;
-      if (st.state === 'open') {
+      if (st.state === 'stop') {
+        cls = 'closed stop';
+        sub = `Не переводить${st.stopExplicit ? ` до ${hmLocal(st.stopUntil)}` : ''}`;
+        tag = 'стоп';
+      } else if (st.state === 'open') {
         cls = st.soon ? 'open soon' : 'open';
         sub = `${L.until} ${hhmm(st.window[1])}, ${L.left} ${dur(st.minsLeft)}`;
         tag = st.soon ? L.soon : L.can;
@@ -268,7 +455,7 @@
       }
       const w = st.window;
       return `<li class="row ${cls}">
-        <div><div class="name">${p.name}</div><div class="sub">${sub}</div></div>
+        <div title="${String(st.stopText || '').replace(/"/g, '&quot;')}"><div class="name">${p.name}</div><div class="sub">${sub}</div></div>
         <div class="bar"><div class="work" style="left:${w[0] / 14.4}%;width:${(w[1] - w[0]) / 14.4}%"></div><div class="nowline" style="left:${nowPos}%"></div></div>
         <span class="tag">${tag}</span></li>`;
     }).join('');
