@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.8
+// @version      1.9
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -55,8 +55,8 @@
   ];
   const ALIAS_RES = TEAMS_ALIASES.map(([k, a]) => [k, new RegExp(`(^|[^а-яёa-z0-9])(${a})(?=$|[^а-яёa-z0-9])`, 'i')]);
   const ALL_RE = /(^|[^а-яё])(все\s+проект\S*|всех|всё|все\s+чаты)(?=$|[^а-яё])/i;
-  const NEG_RE = /(не\s+(кид|перевод|перевед|скид|переда|кида|отправля)\S*|временно\s+не|пока\s+не|\bстоп\b)/i;
-  const POS_RE = /((можно|можем|можете)\s+(уже\s+|снова\s+|опять\s+)?(кид|перевод|скид|переда|отправля)\S*|(кид|перевод|скид)\S*\s+можно|снова\s+(кид|перевод)\S*|можно\s*$)/i;
+  const NEG_RE = /(не\s+(кид|перекид|закид|перевод|перевед|скид|переда|кида|отправля|перебрас|бросать|бросай)\S*|временно\s+не|пока\s+не|\bстоп\b)/i;
+  const POS_RE = /((можно|можем|можете)\s+(уже\s+|снова\s+|опять\s+)?(кид|перекид|закид|перевод|скид|переда|отправля|перебрас)\S*|(кид|перекид|перевод|скид)\S*\s+можно|снова\s+(кид|перекид|перевод)\S*|можно\s*$)/i;
   // Київська хвилина доби для моменту ts
   function kyivMinOf(ts) {
     const p = {};
@@ -95,10 +95,16 @@
   }
   // у повідомленні вказано, до якого часу / на скільки («до 16:15», «30 минут», «час»)? Інакше — «пока что»
   const hasExplicitTime = (text) => { const t = String(text || '').toLowerCase(); const at = t.match(/до\s+(\d{1,2})(?:\s*[:.\s]\s*(\d{2}))?(?!\d)/); return !!(at && +at[1] <= 23) || /(\d{1,3})\s*(мин|минут|м\b)|полчаса|пол\s+часа|(\d{1,2})\s*(час|ч\b)|(^|\s)час(а|ик)?(\s|$)/.test(t); };
+  // набрали в англійській розкладці («rtyn yt gthtdjlbnm» = «кент не переводить») — перекладаємо в російську
+  const EN_RU = { q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ъ', a: 'ф', s: 'ы', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'э', z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю', '`': 'ё' };
+  const toRuLayout = (t) => String(t || '').replace(/[a-z\[\];',.`]/gi, (ch) => { const r = EN_RU[ch.toLowerCase()]; return r ? (ch === ch.toUpperCase() && /[a-z]/i.test(ch) ? r.toUpperCase() : r) : ch; });
+  const looksWrongLayout = (t) => { const lat = (String(t).match(/[a-z]/gi) || []).length, cyr = (String(t).match(/[а-яё]/gi) || []).length; return lat >= 6 && lat > cyr * 2; };
   // повідомлення по порядку → { stops: {KEY: {until, at, text}}, clears: {KEY: at} }
   function parseTeams(msgs) {
     const stops = {}, clears = {};
-    for (const m of msgs.slice().sort((a, b) => a.at - b.at)) {
+    for (const m0 of msgs.slice().sort((a, b) => a.at - b.at)) {
+      // у тексті переважно латиниця — найімовірніше, не та розкладка: читаємо як російський текст
+      const m = looksWrongLayout(m0.text) ? { ...m0, text: toRuLayout(m0.text) } : m0;
       const clauses = m.text.split(/[;!?\n]|,\s|\.\s|\s+а\s+|\s+но\s+/i).map((x) => x.trim()).filter(Boolean);
       let carry = [];
       for (const c of clauses) {
