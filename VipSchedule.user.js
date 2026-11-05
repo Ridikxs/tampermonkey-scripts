@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.7
+// @version      1.8
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -26,10 +26,10 @@
     { name: 'CAT',      weekday: ['08:00', '18:00'], weekend: ['08:00', '17:00'] },
     { name: 'GAMA',     weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
     { name: 'DADDY',    weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
-    { name: 'KENT',     weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
+    { name: 'KENT',     weekday: ['08:00', '17:00'], weekend: ['08:00', '17:00'] },
     { name: 'R7',       weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
     { name: 'KOMETA',   weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
-    { name: 'ARKADA',   weekday: ['09:00', '18:00'], weekend: ['09:00', '18:00'] },
+    { name: 'ARKADA',   weekday: ['08:00', '17:00'], weekend: ['08:00', '17:00'] },
   ];
   // За скільки хвилин до кінця зміни показувати «скоро кінець»
   const SOON_MINUTES = 30;
