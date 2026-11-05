@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Operator Load
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      1.8
 // @author       Will & Lex
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/OperatorLoad.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/OperatorLoad.user.js
@@ -412,12 +412,52 @@
   .un { color: #F28B82; font-size: 11px; font-weight: 650; }
   .foot { color: #7F8898; font-size: 10.5px; margin-top: 10px; padding: 8px 4px 0; border-top: 1px solid rgba(255,255,255,.06); line-height: 1.4; }
   .empty { color: #9AA2B1; padding: 12px 4px; text-align: center; }
+  /* світла тема Chatwoot */
+  .wrap.light .pill { background: rgba(255,255,255,.96); border-color: #E2E6EC; color: #1A1F2B; box-shadow: 0 4px 16px rgba(15,23,42,.10); }
+  .wrap.light .pill:hover { border-color: rgba(59,130,246,.45); }
+  .wrap.light .tag { background: #F1F4F8; color: #5B6575; }
+  .wrap.light .c { background: #F6F8FB; border-color: #E5E9EF; }
+  .wrap.light .c.hot { background: #FDECEC; border-color: #F5C2C2; }
+  .wrap.light .cn { color: #2A3140; }
+  .wrap.light .more, .wrap.light .lab { color: #6A7180; }
+  .wrap.light .more { background: #F1F4F8; }
+  .wrap.light .z { color: #6A7180; background: #EEF1F5; }
+  .wrap.light .l { color: #0F5132; background: #BFEBD4; }
+  .wrap.light .h { color: #7F1D1D; background: #FBC4C4; }
+  .wrap.light .pop { background: rgba(255,255,255,.98); border-color: #E2E6EC; color: #1A1F2B; box-shadow: 0 16px 40px rgba(15,23,42,.16); }
+  .wrap.light .ph span { color: #6A7180; }
+  .wrap.light .seg { background: #F1F4F8; border-color: #E5E9EF; }
+  .wrap.light .seg button { color: #5B6575; }
+  .wrap.light .seg button:hover { color: #1A1F2B; }
+  .wrap.light .seg button.on { color: #fff; }
+  .wrap.light .row:hover { background: #F6F8FB; }
+  .wrap.light .row.hot { background: #FDF1F1; border-color: #F5C9C9; }
+  .wrap.light .nm { color: #1F2633; }
+  .wrap.light .st { background: #B6BDC9; }
+  .wrap.light .k { background: #F6F8FB; border-color: #E2E6EC; color: #6A7180; }
+  .wrap.light .k.vip { color: #A16207; border-color: #F3D59A; background: #FFF6E3; }
+  .wrap.light .k.mgr { color: #6D4FD8; border-color: #D9CEFB; background: #F4F0FF; }
+  .wrap.light .un { color: #DC2626; }
+  .wrap.light .empty { color: #6A7180; }
 </style>
 <div class="wrap" style="position:relative">
   <div class="pill" title="Нагрузка операторов — нажми, чтобы открыть список"></div>
   <div class="pop" hidden></div>
 </div>`;
-  const pill = root.querySelector('.pill'), pop = root.querySelector('.pop');
+  const pill = root.querySelector('.pill'), pop = root.querySelector('.pop'), wrapEl = root.querySelector('.wrap');
+  // світла чи темна тема Chatwoot: клас «dark» на сторінці, а якщо його нема — за кольором фону
+  function isLight() {
+    const de = document.documentElement, b = document.body;
+    if (de.classList.contains('dark') || b.classList.contains('dark') || de.dataset.theme === 'dark') return false;
+    if (de.classList.contains('light') || de.dataset.theme === 'light') return true;
+    for (const el of [document.querySelector('#app'), b, de]) {
+      if (!el) continue;
+      const m = getComputedStyle(el).backgroundColor.match(/\d+(\.\d+)?/g);
+      if (!m || (m.length > 3 && +m[3] === 0)) continue;
+      return (+m[0] * 299 + +m[1] * 587 + +m[2] * 114) / 1000 > 140;
+    }
+    return true;
+  }
   const FL = { all: 'Все', vip: 'VIP', ap: 'AP', mgr: 'Менеджеры' };
 
   // ділимось розкладом VIP/AP з іншими скриптами (автопривітання бере його для повідомлення про нагрузку)
@@ -431,6 +471,17 @@
   function paint() {
     shareKinds();
     const list = rows();
+    // розміщення «зліва» (як у старій версії: блок над списком «Диалоги»)
+    if (layout === 'left') {
+      host.style.display = 'none';
+      if (anchor.blk && anchor.blk.style.marginBottom) anchor.blk.style.marginBottom = '';
+      paintLeft(list);
+      return;
+    }
+    host.style.display = '';
+    wrapEl.classList.toggle('light', isLight());
+    const lp = document.getElementById(LEFT_ID);
+    if (lp) lp.remove();
     pill.className = `pill ${state === 'live' ? 'live' : state === 'loading' ? '' : 'err'}`;
     // нік — перше слово імені, щоб влізло
     const short = (n) => String(n || '').split(/\s+/)[0] || n;
@@ -442,7 +493,7 @@
   }
   function paintPop(list = rows()) {
     const total = list.reduce((a, r) => a + r.open, 0);
-    pop.innerHTML = `<div class="ph"><b>${filter === 'mgr' ? 'Нагрузка менеджеров' : 'Нагрузка операторов'}</b><span>${list.length} ${filter === 'mgr' ? 'менедж.' : 'оп.'} · ${total} чатов</span></div>`
+    pop.innerHTML = `<div class="ph"><b>${filter === 'mgr' ? 'Нагрузка менеджеров' : 'Нагрузка операторов'}</b><span>${list.length} ${filter === 'mgr' ? 'менедж.' : 'оп.'} · ${total} чатов · <a data-lay="left" style="cursor:pointer;text-decoration:underline" title="Показывать блоком слева, над списком диалогов">слева</a></span></div>`
       + `<div class="seg">${Object.entries(FL).map(([k, v]) => `<button type="button" data-f="${k}" class="${filter === k ? 'on' : ''}">${v}</button>`).join('')}</div>`
       + (list.length ? '<div class="rows">' + list.map((r) => `<div class="row${lvl(r.open, r.kind) === 'h' ? ' hot' : ''}" title="${esc(r.name)}\nОткрыто: ${r.open}\nБез ответа: ${r.unattended}">
           <span class="st ${esc(r.status)}"></span><span class="nm"${r.kind === 'mgr' ? ` data-mp="${r.id}" style="cursor:pointer" title="${esc(r.nick || '')}${r.email ? ` · ${esc(r.email)}` : ''}\nКлик — указать проект"` : ''}>${r.kind === 'mgr' ? `Manager ${esc(projTitle(r.proj) || '?')}` : esc(r.name)}</span>
@@ -458,6 +509,7 @@
   pop.addEventListener('click', (e) => {
     const f = e.target.closest('[data-f]');
     if (f) { filter = f.dataset.f; GM_setValue('olFilter', filter); paint(); paintPop(); return; }
+    if (e.target.closest('[data-lay]')) { pop.hidden = true; setLayout('left'); return; }
     // менеджер: вказати проєкт вручну (CAT, GAMA, KOMETA, DADDY, KENT, R7, ARKADA, MERS, REACTIVE)
     const mp = e.target.closest('[data-mp]');
     if (mp) {
@@ -471,6 +523,74 @@
     }
   });
   document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !e.composedPath().includes(host)) pop.hidden = true; });
+
+  // ---------- розміщення: справа (біля аватарки) або зліва (блок над списком «Диалоги», як раніше) ----------
+  let layout = GM_getValue('olLayout', 'right');
+  const LEFT_ID = 'lex-ol-left';
+  let leftExpanded = false;
+  const LEFT_VISIBLE = 6;
+  function setLayout(v) { layout = v; GM_setValue('olLayout', v); paint(); }
+  const leftCss = document.createElement('style');
+  leftCss.textContent = `
+    #${LEFT_ID} { display:flex; flex-direction:column; gap:7px; padding:9px 10px; border-bottom:1px solid rgba(127,140,160,.2);
+      font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    #${LEFT_ID} .lt { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:10px; font-weight:700; letter-spacing:.35px; color:#8E97A7; }
+    #${LEFT_ID} .lt .live { display:inline-flex; align-items:center; gap:5px; }
+    #${LEFT_ID} .lt .dot { width:6px; height:6px; border-radius:50%; background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,.5); }
+    #${LEFT_ID} .lt .dot.err { background:#ef4444; box-shadow:none; }
+    #${LEFT_ID} .fl { display:flex; gap:4px; flex-wrap:wrap; }
+    #${LEFT_ID} .fl button { font:inherit; font-size:10.5px; font-weight:700; border:1px solid rgba(127,140,160,.25); background:transparent; color:#8E97A7; border-radius:999px; padding:2px 8px; cursor:pointer; }
+    #${LEFT_ID} .fl button.on { background:#3B82F6; border-color:#3B82F6; color:#fff; }
+    #${LEFT_ID} .sw { font:inherit; font-size:10px; border:0; background:none; color:#7C9BFF; cursor:pointer; padding:0; }
+    #${LEFT_ID} .gr { display:flex; flex-wrap:wrap; gap:6px; }
+    #${LEFT_ID} .cd { display:inline-flex; align-items:center; gap:6px; min-width:68px; max-width:150px; padding:4px 6px; border-radius:7px;
+      background:rgba(127,140,160,.12); border:1px solid rgba(127,140,160,.22); }
+    #${LEFT_ID} .cd.off { opacity:.55; }
+    #${LEFT_ID} .cd .st { width:6px; height:6px; border-radius:50%; flex:none; background:#64748b; }
+    #${LEFT_ID} .cd .st.online { background:#22c55e; } #${LEFT_ID} .cd .st.busy { background:#f59e0b; }
+    #${LEFT_ID} .cd .nm { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:650; flex:1; }
+    #${LEFT_ID} .cd .un { font-size:10px; color:#f87171; }
+    #${LEFT_ID} .cd .ct { min-width:20px; height:20px; padding:0 5px; border-radius:5px; display:inline-flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:800; }
+    #${LEFT_ID} .cd .ct.z { color:#94a3b8; background:rgba(148,163,184,.16); }
+    #${LEFT_ID} .cd .ct.l { color:#4ade80; background:rgba(34,197,94,.16); }
+    #${LEFT_ID} .cd .ct.h { color:#f87171; background:rgba(239,68,68,.17); }
+    #${LEFT_ID} .mr { font:inherit; font-size:10px; font-weight:700; width:100%; border:0; border-radius:6px; padding:4px 8px; background:rgba(59,130,246,.10); color:#60a5fa; cursor:pointer; }`;
+  document.head.appendChild(leftCss);
+  function dialogsHeader() {
+    const h = [...document.querySelectorAll('h1')].find((el) => /^(Диалоги|Conversations)/.test(el.textContent.trim()) || el.getAttribute('title') === 'Диалоги');
+    return h ? h.closest('div.flex.items-center.justify-between') || h.parentElement : null;
+  }
+  function paintLeft(list) {
+    const hd = dialogsHeader();
+    if (!hd) return;
+    let el = document.getElementById(LEFT_ID);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = LEFT_ID;
+      el.addEventListener('click', (e) => {
+        const f = e.target.closest('[data-f]');
+        if (f) { filter = f.dataset.f; GM_setValue('olFilter', filter); paint(); return; }
+        if (e.target.closest('.mr')) { leftExpanded = !leftExpanded; paint(); return; }
+        if (e.target.closest('.sw')) { setLayout('right'); }
+      });
+    }
+    if (el.previousElementSibling !== hd) hd.after(el);
+    const total = list.reduce((a, r) => a + r.open, 0);
+    const shown = leftExpanded ? list : list.slice(0, LEFT_VISIBLE);
+    const label = (r) => (r.kind === 'mgr' ? `Manager ${projTitle(r.proj) || '?'}` : String(r.name || '').split(/\s+/)[0]);
+    const html = `<div class="lt"><span>${filter === 'mgr' ? 'НАГРУЗКА МЕНЕДЖЕРОВ' : 'НАГРУЗКА ОПЕРАТОРОВ'} · ${total}</span>`
+      + `<span class="live"><span class="dot${state === 'live' ? '' : ' err'}"></span>${state === 'auth' ? 'нет доступа' : 'LIVE'} · <button type="button" class="sw" title="Показывать справа, возле аватарки клиента">справа</button></span></div>`
+      + `<div class="fl">${Object.entries(FL).map(([k, v]) => `<button type="button" data-f="${k}" class="${filter === k ? 'on' : ''}">${v}</button>`).join('')}</div>`
+      + `<div class="gr">${shown.map((r) => `<span class="cd${r.status === 'offline' ? ' off' : ''}" title="${esc(r.name)}${r.proj ? ` · ${esc(r.proj)}` : ''}\nОткрыто: ${r.open}\nБез ответа: ${r.unattended}"><span class="st ${esc(r.status)}"></span><span class="nm">${esc(label(r))}</span>${r.unattended ? `<span class="un">⏳${r.unattended}</span>` : ''}<span class="ct ${lvl(r.open, r.kind)}">${r.open}</span></span>`).join('') || '<span style="color:#8E97A7">—</span>'}</div>`
+      + (list.length > LEFT_VISIBLE ? `<button type="button" class="mr">${leftExpanded ? 'Скрыть' : `Показать ещё · ${list.length - LEFT_VISIBLE}`}</button>` : '');
+    if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+  }
+  // Vue перемальовує шапку — повертаємо блок на місце
+  let leftFix = null;
+  new MutationObserver(() => {
+    if (layout !== 'left' || leftFix || document.getElementById(LEFT_ID)) return;
+    leftFix = setTimeout(() => { leftFix = null; paint(); }, 300);
+  }).observe(document.body, { childList: true, subtree: true });
 
   // ---------- місце: праворуч від аватарки клієнта в панелі «Контакт», рівно по ній ----------
   // при скролі панелі плашка тримається під шапкою «Контакт»
@@ -560,6 +680,7 @@
   const repos = () => { if (rafPos) return; rafPos = requestAnimationFrame(() => { rafPos = 0; place(); }); };
   window.addEventListener('scroll', () => { if (host.style.position !== 'absolute') repos(); }, true);
   window.addEventListener('resize', () => { anchor.at = 0; repos(); });
+  GM_registerMenuCommand('Нагрузка: расположение — справа / слева', () => setLayout(layout === 'left' ? 'right' : 'left'));
   GM_registerMenuCommand('Нагрузка: пересчитать VIP / AP', () => { auto.at = 0; dept.at = 0; seenVip.at = 0; loadTeams(); loadDept(); loadSeen(); });
 
   document.body.appendChild(host);
