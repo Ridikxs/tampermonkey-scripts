@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.9
+// @version      1.10
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -55,7 +55,7 @@
   ];
   const ALIAS_RES = TEAMS_ALIASES.map(([k, a]) => [k, new RegExp(`(^|[^а-яёa-z0-9])(${a})(?=$|[^а-яёa-z0-9])`, 'i')]);
   const ALL_RE = /(^|[^а-яё])(все\s+проект\S*|всех|всё|все\s+чаты)(?=$|[^а-яё])/i;
-  const NEG_RE = /(не\s+(кид|перекид|закид|перевод|перевед|скид|переда|кида|отправля|перебрас|бросать|бросай)\S*|временно\s+не|пока\s+не|\bстоп\b)/i;
+  const NEG_RE = /(не\s+(кид|перекид|закид|перевод|перевед|скид|переда|кида|отправля|перебрас|бросать|бросай|принима)\S*|временно\s+не|пока\s+не|\bстоп\b)/i;
   const POS_RE = /((можно|можем|можете)\s+(уже\s+|снова\s+|опять\s+)?(кид|перекид|закид|перевод|скид|переда|отправля|перебрас)\S*|(кид|перекид|перевод|скид)\S*\s+можно|снова\s+(кид|перекид|перевод)\S*|можно\s*$)/i;
   // Київська хвилина доби для моменту ts
   function kyivMinOf(ts) {
@@ -114,7 +114,9 @@
         if (!keys.length) keys = carry;
         if (!keys.length) continue;
         carry = keys;
-        const neg = NEG_RE.test(c), pos = POS_RE.test(c);
+        let neg = NEG_RE.test(c), pos = POS_RE.test(c);
+        // і «не кидать», і «можно кидать» в одному реченні (напр. процитували старе) — правий той, що написаний пізніше
+        if (neg && pos) { const ln = c.search(new RegExp(`${NEG_RE.source}(?![\\s\\S]*${NEG_RE.source})`, 'i')), lp = c.search(new RegExp(`${POS_RE.source}(?![\\s\\S]*${POS_RE.source})`, 'i')); if (lp > ln) neg = false; else pos = false; }
         if (pos && !neg) keys.forEach((k) => { delete stops[k]; clears[k] = m.at; });
         // стоп діє максимум до кінця зміни: наступна зміна починається «з чистого аркуша»
         // новий день = усі працюють, поки знову не напишуть «не кидать»: стоп не переходить через північ (Київ)
