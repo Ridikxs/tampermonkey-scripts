@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chatwoot Tickets
 // @namespace    billy.ticket-check
-// @version      1.2
+// @version      1.3
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TicketCheck.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/TicketCheck.user.js
 // @description  Кнопка у почты клиента в чате: показывает его тикеты из plevantis
@@ -127,14 +127,16 @@
     }, 1500);
   }
 
-  function fetchTickets(email, force) {
-    const c = cache.get(email);
+  // spam = true — тікети, які plevantis поклав у «Спам» (&spam=true)
+  function fetchTickets(email, force, spam = false) {
+    const key = spam ? `${email}|spam` : email;
+    const c = cache.get(key);
     if (!force && c && c.full && Date.now() - c.time < CACHE_SECONDS * 1000) return Promise.resolve(c.res);
-    if (inflight.has(email)) return inflight.get(email);
+    if (inflight.has(key)) return inflight.get(key);
     const p = new Promise((resolve) => {
       GM_xmlhttpRequest({
         method: 'GET',
-        url: `${API}?query=${encodeURIComponent(email)}&sortBy=lastMessageAt&order=desc`,
+        url: `${API}?query=${encodeURIComponent(email)}&sortBy=lastMessageAt&order=desc${spam ? '&spam=true' : ''}`,
         headers: { Accept: 'application/json' },
         timeout: 20000,
         onload: (r) => {
@@ -151,14 +153,14 @@
               }
             } catch (e) { res = { error: 'parse' }; }
           }
-          if (!res.error) { cache.set(email, { time: Date.now(), res, full: true }); persist(); }
+          if (!res.error) { cache.set(key, { time: Date.now(), res, full: true }); persist(); }
           resolve(res);
         },
         onerror: () => resolve({ error: 'net' }),
         ontimeout: () => resolve({ error: 'net' }),
       });
-    }).finally(() => inflight.delete(email));
-    inflight.set(email, p);
+    }).finally(() => inflight.delete(key));
+    inflight.set(key, p);
     return p;
   }
 
@@ -184,6 +186,24 @@
         },
         onerror: () => resolve({ error: T().errNet, retry: true }),
         ontimeout: () => resolve({ error: T().errNet, retry: true }),
+      });
+    });
+  }
+  // тікет позначений як спам (навіть якщо прийшов у звичайному списку)
+  const isSpam = (t) => !!(t && ((t.spam && (t.spam.status || t.spam === true)) || /spam/i.test(String(t.status || ''))));
+  // дістати тікет зі спаму: POST /api/helpdesk/tickets/<ID>/unspam
+  function unspamTicket(ticketId) {
+    return new Promise((resolve) => {
+      GM_xmlhttpRequest({
+        method: 'POST', url: `${API}/${encodeURIComponent(ticketId)}/unspam`,
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 20000,
+        onload: (r) => {
+          if (r.status === 401 || r.status === 403) { resolve({ error: T().errAuth }); return; }
+          let j = null; try { j = JSON.parse(r.responseText); } catch (e) {}
+          if (r.status < 200 || r.status >= 300 || (j && j.ok === false)) { resolve({ error: (j && (j.error || j.message)) ? String((j.error && j.error.message) || j.error || j.message) : `HTTP ${r.status}` }); return; }
+          resolve({ ok: true });
+        },
+        onerror: () => resolve({ error: T().errNet }), ontimeout: () => resolve({ error: T().errNet }),
       });
     });
   }
@@ -540,6 +560,10 @@
   .msg { color: var(--muted); padding: 18px 4px; text-align: center; }
   .error { background: var(--bad-soft); color: var(--bad); border-radius: 10px; padding: 10px 12px; }
 
+  .tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .unspam { margin-top: 6px; font: inherit; font-size: 11.5px; font-weight: 650; border: 1px solid rgba(59,130,246,.45); background: rgba(59,130,246,.10); color: #60a5fa; border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+  .tabs button { font: inherit; font-size: 12px; font-weight: 650; border: 1px solid rgba(127,140,160,.3); background: transparent; color: inherit; opacity: .75; border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+  .tabs button.on { background: #3B82F6; border-color: #3B82F6; color: #fff; opacity: 1; }
   .sum { border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-weight: 650; font-size: 14px; }
   .sum small { display: block; font-weight: 400; font-size: 12px; color: var(--ink); opacity: .75; margin-top: 2px; }
   .sum.act { background: var(--act-soft); color: var(--act); }
@@ -585,7 +609,8 @@
   .facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; margin-bottom: 10px; }
   .facts dt { color: var(--muted); }
   .facts dd { word-break: break-word; }
-  .onlymsg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; cursor: pointer; }
+  .onlymsg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; cursor: pointer; user-select: none; }
+  .onlymsg input { flex: none; width: 15px; height: 15px; margin: 0; padding: 0; cursor: pointer; accent-color: #3B82F6; }
   .tl { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
   .bub { border-radius: 10px; padding: 8px 11px; font-size: 12.5px; border: 1px solid var(--line); }
   .bub .bh { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
@@ -636,6 +661,8 @@
   const $ = (s) => root.querySelector(s);
   const panel = $('.panel'), body = $('.body'), input = $('input');
   let shownEmail = null, lastRes = null, sorted = [], detailIdx = null;
+  let lastSpam = null, viewSpam = false;   // вкладка «Спам»
+  let unspamBusy = null, unspamMsg = null;
   let onlyMsg = GM_getValue('tcOnlyMsg', false);
   const drafts = new Map();               // ID тікета -> текст чернетки
   let compPrivate = true, compBusy = false, compNote = null, compStatus = '';
@@ -692,9 +719,11 @@
   new ResizeObserver(clampPos).observe(panel);   // віконце розширюється, коли відкриваєш тікет — не даємо вилізти за екран
 
   async function load(email, force) {
-    shownEmail = email; detailIdx = null; lastRes = null; panel.classList.remove('wide');
+    shownEmail = email; detailIdx = null; lastRes = null; lastSpam = null; viewSpam = false; panel.classList.remove('wide');
     input.value = email;
     body.innerHTML = `<div class="msg">${esc(T().loading)}</div>`;
+    // спам підвантажуємо паралельно — щоб на вкладці одразу було видно, скільки там листів
+    fetchTickets(email, force, true).then((sr) => { if (email !== shownEmail) return; lastSpam = sr; if (detailIdx === null) renderBody(); });
     const res = await fetchTickets(email, force);
     if (email !== shownEmail) return;
     lastRes = res;
@@ -702,21 +731,49 @@
     renderBody();
   }
 
+  function spamTabs() {
+    const n = lastSpam && !lastSpam.error ? (lastSpam.tickets || []).length : null;
+    return `<div class="tabs"><button type="button" data-view="main" class="${viewSpam ? '' : 'on'}">${lang === 'uk' ? 'Тікети' : 'Тикеты'}</button>`
+      + `<button type="button" data-view="spam" class="${viewSpam ? 'on' : ''}">${lang === 'uk' ? 'Спам' : 'Спам'}${n === null ? '' : ` · ${n}`}</button></div>`;
+  }
   function renderBody() {
-    const L = T(), res = lastRes;
-    if (!res) return;
+    const L = T(), res = viewSpam ? lastSpam : lastRes;
+    if (!res) { if (viewSpam) body.innerHTML = spamTabs() + `<div class="msg">${esc(L.loading)}</div>`; return; }
     if (res.error) {
       const m = { auth: L.errAuth, net: L.errNet, parse: L.errParse, http: L.errHttp(res.code), api: L.errAuth }[res.error];
-      body.innerHTML = `<div class="error">${esc(m)}</div>`;
+      body.innerHTML = spamTabs() + `<div class="error">${esc(m)}</div>`;
       return;
     }
     if (detailIdx !== null) { renderDetail(); return; }
+    if (viewSpam) {
+      const list = sorted = (res.tickets || []).slice().sort((a, b) => Date.parse(lastTime(b)) - Date.parse(lastTime(a)));
+      let html = spamTabs() + (list.length
+        ? `<div class="sum act">${lang === 'uk' ? `У спамі: ${list.length}` : `В спаме: ${list.length}`}<small>${lang === 'uk' ? 'Листи клієнта, які plevantis відправив у спам' : 'Письма клиента, которые plevantis отправил в спам'}</small></div>`
+        : `<div class="sum none">${lang === 'uk' ? 'У спамі порожньо' : 'В спаме пусто'}</div>`);
+      html += list.map((t, i) => {
+        const msgs = (t.events || []).filter((e) => e.type === 'message' && e.message && (e.message.text || '').trim());
+        const last = msgs[msgs.length - 1];
+        const team = t.assignment && t.assignment.team && t.assignment.team.name;
+        return `
+      <div class="t done" data-i="${i}" title="${esc(L.open)}">
+        ${topLine(t).replace('<span class="spacer">', '<span class="chip s-other">spam</span><span class="spacer">')}
+        <div class="subj">${esc((t.subject || '').trim() || L.noSubject)}</div>
+        <div class="meta">${esc(team || '')}</div>
+        ${last ? `<div class="last"><b>${esc(who(last))}:</b> ${esc(cleanText(last.message.text).replace(/\s+/g, ' ').slice(0, 220))}</div>` : ''}
+        <button type="button" class="unspam" data-us="${i}">${unspamBusy === t.ID ? (lang === 'uk' ? 'Дістаю…' : 'Достаю…') : (lang === 'uk' ? '↩ Дістати зі спаму' : '↩ Достать из спама')}</button>
+      </div>`;
+      }).join('');
+      if (unspamMsg) html = spamTabs() + `<div class="${unspamMsg.ok ? 'sum ok' : 'error'}">${esc(unspamMsg.text)}</div>` + html.slice(spamTabs().length);
+      body.innerHTML = html;
+      return;
+    }
     const list = sorted = res.tickets.slice().sort((a, b) => (isActive(b) - isActive(a)) || (Date.parse(lastTime(b)) - Date.parse(lastTime(a))));
     const act = list.filter(isActive).length;
     let html;
     if (act) html = `<div class="sum act">${esc(L.sumActive(act))}<small>${esc(L.sumActiveSub(res.total - act))}</small></div>`;
     else if (list.length) html = `<div class="sum ok">${esc(L.sumDone)}<small>${esc(L.sumDoneSub(res.total, ago(lastTime(list[0]))))}</small></div>`;
     else html = `<div class="sum none">${esc(L.sumNone)}<small>${esc(L.sumNoneSub)}</small></div>`;
+    html = spamTabs() + html;
     if (res.hasNext || res.total > list.length) html += `<div class="partial">${esc(L.partial(list.length, res.total))}</div>`;
 
     html += list.map((t, i) => {
@@ -810,7 +867,7 @@
       <dl class="facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       <label class="onlymsg"><input type="checkbox" class="om" ${onlyMsg ? 'checked' : ''}> ${esc(L.onlyMsg)}</label>
       <div class="tl">${(t.events || []).map(renderEvent).join('')}</div>
-      ${composer(t)}
+      ${viewSpam || isSpam(t) ? `<button type="button" class="act-btn unspam" data-us="${detailIdx}">${unspamBusy === t.ID ? (lang === 'uk' ? 'Дістаю…' : 'Достаю…') : (lang === 'uk' ? '↩ Дістати зі спаму' : '↩ Достать из спама')}</button>` : composer(t)}
       <button class="act-btn" data-copy="${esc(t.shortID)}">${esc(L.copyOpen)}</button>`;
   }
   function composer(t) {
@@ -863,6 +920,27 @@
   }
 
   body.addEventListener('click', (e) => {
+    const us = e.target.closest('[data-us]');
+    if (us) {
+      const t = sorted[+us.dataset.us];
+      if (!t || unspamBusy) return;
+      unspamBusy = t.ID; unspamMsg = null; renderBody();
+      unspamTicket(t.ID).then(async (r) => {
+        unspamBusy = null;
+        if (r.ok) {
+          unspamMsg = { ok: true, text: `#${t.shortID} ${lang === 'uk' ? 'дістав зі спаму — тепер він у звичайних тікетах' : 'достал из спама — теперь он в обычных тикетах'}` };
+          const email = shownEmail;
+          lastSpam = { ...lastSpam, tickets: (lastSpam.tickets || []).filter((x) => x.ID !== t.ID) };
+          cache.delete(email); cache.delete(`${email}|spam`);
+          detailIdx = null; panel.classList.remove('wide');
+          fetchTickets(email, true).then((res) => { if (email === shownEmail) { lastRes = res; if (email === currentEmail) { badge = badgeFrom(res); paintBtn(); } renderBody(); } });
+        } else unspamMsg = { ok: false, text: `${lang === 'uk' ? 'Не вдалося дістати' : 'Не удалось достать'}: ${r.error}` };
+        renderBody();
+      });
+      return;
+    }
+    const vw = e.target.closest('[data-view]');
+    if (vw) { unspamMsg = null; viewSpam = vw.dataset.view === 'spam'; detailIdx = null; panel.classList.remove('wide'); renderBody(); body.scrollTop = 0; return; }
     const cp = e.target.closest('[data-copy]');
     if (cp) {
       GM_setClipboard(cp.dataset.copy, 'text');
