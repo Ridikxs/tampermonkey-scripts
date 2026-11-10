@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.10
+// @version      1.11
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -100,11 +100,33 @@
   const toRuLayout = (t) => String(t || '').replace(/[a-z\[\];',.`]/gi, (ch) => { const r = EN_RU[ch.toLowerCase()]; return r ? (ch === ch.toUpperCase() && /[a-z]/i.test(ch) ? r.toUpperCase() : r) : ch; });
   const looksWrongLayout = (t) => { const lat = (String(t).match(/[a-z]/gi) || []).length, cyr = (String(t).match(/[а-яё]/gi) || []).length; return lat >= 6 && lat > cyr * 2; };
   // повідомлення по порядку → { stops: {KEY: {until, at, text}}, clears: {KEY: at} }
+  // опечатки в дієслові («перкидывать», «пеерводить», «кидатб») — приводимо до звичайного «кидать»
+  const VERBS = ['кидать', 'кидайте', 'кидаем', 'перекидывать', 'перекидывайте', 'закидывать', 'скидывать', 'переводить', 'переводите', 'перевести', 'передавать', 'отправлять', 'перебрасывать', 'принимать'];
+  function lev(a, b) {
+    const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[n];
+  }
+  function fixVerbs(text) {
+    return String(text || '').replace(/[а-яё]{4,}/gi, (w) => {
+      const lw = w.toLowerCase();
+      if (/кида|кидыв|кидат|кидай/.test(lw)) return 'кидать';                       // «перкидывать», «пркидывать» і т.п.
+      if (/(перев|перед|отправ|брос|принима)/.test(lw)) return w;                   // і так розпізнається
+      const lim = lw.length >= 8 ? 2 : 1;
+      return VERBS.some((v) => lev(lw, v) <= lim) ? 'кидать' : w;
+    });
+  }
   function parseTeams(msgs) {
     const stops = {}, clears = {};
     for (const m0 of msgs.slice().sort((a, b) => a.at - b.at)) {
       // у тексті переважно латиниця — найімовірніше, не та розкладка: читаємо як російський текст
-      const m = looksWrongLayout(m0.text) ? { ...m0, text: toRuLayout(m0.text) } : m0;
+      const m1 = looksWrongLayout(m0.text) ? { ...m0, text: toRuLayout(m0.text) } : m0;
+      const m = { ...m1, text: fixVerbs(m1.text) };
       const clauses = m.text.split(/[;!?\n]|,\s|\.\s|\s+а\s+|\s+но\s+/i).map((x) => x.trim()).filter(Boolean);
       let carry = [];
       for (const c of clauses) {
