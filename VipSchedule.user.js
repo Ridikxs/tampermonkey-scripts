@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.11
+// @version      1.12
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -132,7 +132,8 @@
       for (const c of clauses) {
         let keys = ALIAS_RES.filter(([, re]) => re.test(c)).map(([k]) => k);
         // «все проекты» — це VIP-менеджери проєктів; Reactivation — окремі менеджери, їх зупиняє тільки «реактив…»
-        if (!keys.length && ALL_RE.test(c)) keys = KEYS.filter((k) => k !== 'Reactivation');
+        // «все проекты» + ще щось («все проекты и реактив») — усі проєкти РАЗОМ із названими окремо
+        if (ALL_RE.test(c)) keys = [...new Set([...keys, ...KEYS.filter((k) => k !== 'Reactivation')])];
         if (!keys.length) keys = carry;
         if (!keys.length) continue;
         carry = keys;
