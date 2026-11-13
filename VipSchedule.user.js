@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.12
+// @version      1.13
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -157,7 +157,7 @@
       if (!badge.isConnected && document.body) document.body.appendChild(badge);
       badge.style.background = ok ? '#1E4636' : '#4A3917';
       badge.style.color = ok ? '#5FD39D' : '#F2B544';
-      badge.textContent = `🕒 График · ${text}`;
+      { const bt = `🕒 График · ${text}`; if (badge.textContent !== bt) badge.textContent = bt; }
     };
     const chatOpen = () => {
       const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -206,7 +206,18 @@
       const list = Object.entries(stops).map(([k, v]) => { if (v.explicit === false) return k; const d = new Date(v.until); return `${k} до ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; });
       paint(true, `читаю «${TEAMS_CHAT}» (${msgs.length} сообщ.) · ${list.length ? `не переводить: ${list.join(', ')}` : 'стопов нет'}`);
     };
-    setInterval(tick, 5000);
+    // фонову вкладку Chrome «присипляє» (таймери раз на хвилину) — тікаємо з Worker'а, його не гальмують
+    try {
+      const wk = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),4000)'], { type: 'text/javascript' })));
+      wk.onmessage = () => tick();
+    } catch (e) { setInterval(tick, 5000); }
+    // нове / відредаговане повідомлення в чаті — читаємо одразу, не чекаючи таймера
+    let mT = null;
+    new MutationObserver((muts) => {
+      if (mT || muts.every((m) => badge.contains(m.target))) return;   // наша власна плашка — не рахуємо
+      mT = setTimeout(() => { mT = null; tick(); }, 800);
+    })
+      .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     setTimeout(tick, 2500);
   }
 
