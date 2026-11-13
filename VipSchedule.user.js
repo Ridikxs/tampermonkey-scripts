@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VIP-менеджеры: график
 // @namespace    billy.vip-schedule
-// @version      1.13
+// @version      1.15
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/VipSchedule.user.js
 // @description  Время по Киеву и Москве и работают ли сейчас VIP-менеджеры на каждом проекте (+ стопы «не кидать» из чата Teams, если он открыт во вкладке)
@@ -170,7 +170,7 @@
     // повідомлення: кожен <time datetime> — це час одного повідомлення; беремо найближчий блок навколо нього
     const readMsgs = () => {
       const out = [];
-      const seen = new Set();
+      const seen = new Set(), seenBody = new Set();
       for (const tm of document.querySelectorAll('time[datetime]')) {
         const at = Date.parse(tm.getAttribute('datetime'));
         if (!at || Date.now() - at > 36 * 3600000) continue;
@@ -183,6 +183,7 @@
         if (!box || seen.has(box)) continue;
         seen.add(box);
         const body = box.querySelector('[data-tid="chat-pane-message"] [id^="content-"], [id^="content-"], [data-tid="message-body-content"], [data-tid="message-body"]') || box;
+        seenBody.add(body);
         const clone = body.cloneNode(true);
         // цитата («відповісти на повідомлення»), ім'я автора, час, реакції — не текст повідомлення
         clone.querySelectorAll('blockquote, [data-tid*="quote" i], [class*="quote" i], [data-tid*="author" i], [data-tid*="reaction" i], [data-tid*="divider" i], [role="separator"], time, button').forEach((x) => x.remove());
@@ -190,6 +191,18 @@
         const text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ')
           .replace(/(не\s*прочитан\S*(\s+сообщени\S*)?|последнее\s+прочитанное|новые\s+сообщения|изменено|edited|unread\s+messages?|new\s+messages?)/gi, ' ')
           .replace(/\s+/g, ' ').trim();
+        if (text) out.push({ at, text: text.slice(0, 300) });
+      }
+      // повідомлення-«продовження» (той самий автор підряд) Teams показує БЕЗ часу — час беремо з id «content-<мітка часу>»
+      for (const el of document.querySelectorAll('[id^="content-"]')) {
+        if (seenBody.has(el) || [...seenBody].some((b) => b.contains(el) || el.contains(b))) continue;
+        const mm = el.id.match(/^content-(\d{12,14})$/);
+        if (!mm) continue;
+        const at = +mm[1];
+        if (Date.now() - at > 36 * 3600000 || at - Date.now() > 3600000) continue;
+        const clone = el.cloneNode(true);
+        clone.querySelectorAll('blockquote, [data-tid*="quote" i], [class*="quote" i], [data-tid*="reaction" i], time, button').forEach((x) => x.remove());
+        const text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').replace(/(изменено|edited)/gi, ' ').replace(/\s+/g, ' ').trim();
         if (text) out.push({ at, text: text.slice(0, 300) });
       }
       return out;
@@ -419,7 +432,14 @@
       const n = JSON.parse(localStorage.getItem('ndStopsShared') || 'null');
       if (n && now - n.at < 60000) {
         if (n.live) out.live = true;
-        for (const [k, v] of Object.entries(n.stops || {})) if (v.until > now && !out.stops[k]) out.stops[k] = v;
+        // з «Бездепу» беремо ТІЛЬКИ ручні стопи (кнопкою). Стопи з Teams — лише власні: інакше старий «не кидать»
+        // з іншого скрипта перебивав би «можно» (наприклад, «коты можно переводжить»)
+        const ownLive = t && t.ok && now - t.at < TEAMS_FRESH_MIN * 60000;
+        for (const [k, v] of Object.entries(n.stops || {})) {
+          if (!(v.until > now) || out.stops[k]) continue;
+          if (v.src !== 'manual' && ownLive) continue;
+          out.stops[k] = v;
+        }
       }
     } catch (e) { /* */ }
     return out;
