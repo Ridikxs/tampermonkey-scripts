@@ -2,7 +2,7 @@
 // @name         Продажа в один клик
 // @namespace    support.sale-script
 // @author       Lex
-// @version      1.15
+// @version      1.16
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SaleScript.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SaleScript.user.js
 // @description  Кнопка «Продажа» в чате: выбираешь бокс (АП / PreVIP / VIP) — отправляет твой текст под этот бокс с паузами, ставит метку в чате и тег бокса в Fundist. Видно, какие теги уже стоят у клиента. Тексты: ПКМ по кнопке
@@ -188,6 +188,7 @@
       openClient: 'Відкрити клієнта у Fundist',
       stoppedMsg: (i) => `Зупинено. Надіслано повідомлень: ${i}. Мітку не ставив.`,
       errAuth: 'Не вийшло авторизуватись у чаті. Онови сторінку і спробуй ще раз.',
+      noLabel: 'Мітку в чаті не поставив — не обрана твоя мітка. Обери її в ⚙ (ПКМ по кнопці «Продаж»).',
       errSend: (i) => `Повідомлення ${i} не надіслалось. Перевір чат і, якщо треба, допиши вручну.`,
       errGen: (m) => `Помилка: ${m}`, noChat: 'Спочатку відкрий чат з клієнтом.',
       leave: 'Продажа ще надсилається. Точно закрити?', menuLang: 'Мова: українська → русский',
@@ -207,6 +208,7 @@
       openClient: 'Открыть клиента в Fundist',
       stoppedMsg: (i) => `Остановлено. Отправлено сообщений: ${i}. Метку не ставил.`,
       errAuth: 'Не получилось авторизоваться в чате. Обнови страницу и попробуй ещё раз.',
+      noLabel: 'Метку в чате не поставил — не выбрана твоя метка. Выбери её в ⚙ (ПКМ по кнопке «Продажа»).',
       errSend: (i) => `Сообщение ${i} не отправилось. Проверь чат и при необходимости допиши вручную.`,
       errGen: (m) => `Ошибка: ${m}`, noChat: 'Сначала открой чат с клиентом.',
       leave: 'Продажа ещё отправляется. Точно закрыть?', menuLang: 'Язык: русский → українська',
@@ -526,7 +528,7 @@
         if (!r.ok) fMsg = fundistErr(r, f);
       }
     }
-    const problems = [!ok && T().labelFail(), fMsg].filter(Boolean);
+    const problems = [!LABEL && T().noLabel, !ok && T().labelFail(), fMsg].filter(Boolean);
     finish(problems.length ? 'err' : 'done', problems.length ? 30000 : 20000);
     // якщо не вийшло з тегом у Fundist (наприклад, не залогінений) — у віконці буде кнопка «Поставити тег ще раз»
     const retry = fMsg && prep.fundist ? { f: { ...prep.fundist, tag: script.box.tag }, who: prep.who, conv, cardName: prep.cardName || '', labelOk: ok } : null;
@@ -660,6 +662,7 @@
   .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .pill { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: #272C37; color: #9AA2B1; border: 1px solid #363C49; }
   .pill b { color: #ECEFF4; } .pill.ok { color: #5FD39D; border-color: #2C6B50; background: #1A3329; } .pill.bad { color: #EF6B63; border-color: #6E3431; background: #2A1716; }
+  button.pill { cursor: pointer; font-family: inherit; } button.pill:hover { border-color: #EF6B63; }
   .pill.warnp { color: #F2B544; border-color: #7A5A1C; background: #2E2614; }
   .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .box.narrow { padding: 10px; } .box.narrow .cols { gap: 4px; } .box.narrow .col { padding: 5px; } .box.narrow .bx { padding: 7px 8px; }
@@ -764,6 +767,7 @@
       box.innerHTML = `<div class="ph"><div><b>${ru ? 'Какой бокс начислить?' : 'Який бокс нарахувати?'}</b>${prep.autoSet ? ` · <span class="proj">${esc(prep.project ? prep.project.toUpperCase() : (SETS.find((x) => x.id === prep.set) || {}).title || '')}</span>` : ''}${prep.who ? `<span class="mu"> · ${esc(prep.who)}</span>` : ''}</div>
           <button class="ic cfg" title="${ru ? 'Тексты сообщений' : 'Тексти повідомлень'}">⚙</button><button class="ic x" title="${esc(T().close)}">✕</button></div>
         <div class="pills">${tier ? `<span class="pill">${ru ? 'Статус' : 'Статус'}: <b>${tierTxt}</b></span>` : ''}<span class="pill ${has.length ? 'bad' : info && !info.err ? 'ok' : ''}">${esc(st.replace(/^[🔴🟢⚠⏳]\s*/u, ''))}</span>
+          ${!LABEL ? `<button class="pill bad cfg nolbl">${ru ? '⚠ не выбрана твоя метка — нажми, чтобы выбрать' : '⚠ не обрана твоя мітка — натисни, щоб обрати'}</button>` : ''}
           ${prep.hasLabel ? `<span class="pill warnp">${ru ? 'в чате уже продавали' : 'у чаті вже продавали'}</span>` : ''}</div>
         ${prep.autoSet ? '' : `<div class="sets">${SETS.map((x) => `<button class="set${x.id === prep.set ? ' on' : ''}" data-set="${x.id}">${esc(x.title)}</button>`).join('')}</div>`}
         <div class="cols">${GROUPS.map((g) => `<div class="col g-${g.id}${tier === g.id ? ' me' : ''}"><div class="gh"><span class="dot"></span>${esc(g.title)}</div>
