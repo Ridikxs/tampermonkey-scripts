@@ -2,7 +2,7 @@
 // @name         Продажа в один клик
 // @namespace    support.sale-script
 // @author       Lex
-// @version      1.17
+// @version      1.19
 // @updateURL    https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SaleScript.user.js
 // @downloadURL  https://raw.githubusercontent.com/Ridikxs/tampermonkey-scripts/main/SaleScript.user.js
 // @description  Кнопка «Продажа» в чате: выбираешь бокс (АП / PreVIP / VIP) — отправляет твой текст под этот бокс с паузами, ставит метку в чате и тег бокса в Fundist. Видно, какие теги уже стоят у клиента. Тексты: ПКМ по кнопке
@@ -77,8 +77,8 @@
   // стандартні тексти для кожного боксу (оператор змінює їх у ⚙). {бокс} {фс} {руб} {деп} {имя} — підставляються самі
   // Для R7/DADDY — тільки ФС, без RUB. Ім'я клієнта не підставляється — оператор пише сам, якщо треба
   const defMsgs = (bx) => [bx.set === 'rd'
-    ? 'Успешно начислили вам бонус - {бокс}: до {фс} ФС! Чтобы его активировать, подпишитесь на бонус в разделе «Бонусы» и внесите депозит от {деп} RUB.'
-    : 'Успешно начислили вам бонус - {бокс}: до {фс} ФС и {руб} RUB! Чтобы его активировать, подпишитесь на бонус в разделе «Бонусы» и внесите депозит от {деп} RUB.',
+    ? 'Успешно начислили вам бонус - {бокс}: до {фс} ФС! Чтобы его активировать, подпишитесь на бонус в разделе «Бонусы» и внесите депозит от {деп} RUB. Хорошо?'
+    : 'Успешно начислили вам бонус - {бокс}: до {фс} ФС и {руб} RUB! Чтобы его активировать, подпишитесь на бонус в разделе «Бонусы» и внесите депозит от {деп} RUB. Хорошо?',
   ];
   // SCRIPTS — тексти по боксах (так їх бачать решта частин скрипта)
   const SCRIPTS = BOXES.map((bx) => ({ id: bx.id, title: bx.name, box: bx, messages: defMsgs(bx) }));
@@ -888,6 +888,7 @@
       nameTip: 'Вставити в текст:',
       ph: 'Текст повідомлення…', count: (n) => `${n} повідомл.`,
       resetTab: 'стандартний текст', resetTabQ: 'Повернути стандартні тексти для цього боксу?',
+      resetAllT: 'стандартний текст для всіх', resetAllTQ: 'Поставити стандартний текст в УСІ бокси всіх проєктів? Твої тексти в них зітруться (мітка й пауза лишаться). Потім натисни «Зберегти».',
       reset: 'Скинути все', close: 'Закрити', save: 'Зберегти', confirm: 'Повернути всі тексти й налаштування до стандартних?',
       wasReset: 'Налаштування скинуто до стандартних', saved: '✓ Збережено', empty: (t) => `У «${t}» немає жодного повідомлення — додай хоча б одне.`,
     } : {
@@ -902,6 +903,7 @@
       nameTip: 'Вставить в текст:',
       ph: 'Текст сообщения…', count: (n) => `${n} сообщ.`,
       resetTab: 'стандартный текст', resetTabQ: 'Вернуть стандартные тексты для этого бокса?',
+      resetAllT: 'стандартный текст для всех', resetAllTQ: 'Поставить стандартный текст во ВСЕ боксы всех проектов? Твои тексты в них сотрутся (метка и пауза останутся). Потом нажми «Сохранить».',
       reset: 'Сбросить всё', close: 'Закрыть', save: 'Сохранить', confirm: 'Вернуть все тексты и настройки к стандартным?',
       wasReset: 'Настройки сброшены к стандартным', saved: '✓ Сохранено', empty: (t) => `В «${t}» нет ни одного сообщения — добавь хотя бы одно.`,
     };
@@ -953,6 +955,7 @@
   .chips { display: flex; align-items: center; gap: 4px; color: #8E97A7; font-size: 11.5px; flex: 1; flex-wrap: wrap; }
   .chip { background: #232832; color: #C9D1E0; border: 1px solid #333946; border-radius: 6px; padding: 1px 7px; font: 11px ui-monospace, Menlo, monospace; cursor: pointer; }
   .chip:hover { border-color: #7C9BFF; color: #fff; }
+  .rbtns { margin-left: auto; display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .rtab { background: none; border: 0; color: #8E97A7; text-decoration: underline; cursor: pointer; font: inherit; font-size: 11.5px; }
   .gen { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-top: 1px solid #2B313C; color: #9AA2B1; font-size: 12px; }
   .gen label { color: #9AA2B1; } .gen .lbl { flex: 1; max-width: 260px; padding: 5px 9px; }
@@ -993,7 +996,7 @@
           <button type="button" class="ib del" title="${S.del}">✕</button></div>
       </div>`).join('')
         + `<div class="foot"><button type="button" class="add">${S.add}</button>
-          <button type="button" class="rtab">${S.resetTab}</button></div>
+          <span class="rbtns"><button type="button" class="rtab">${S.resetTab}</button><button type="button" class="rtab rall">${S.resetAllT}</button></span></div>
         <div class="vars"><div class="vh">${S.varsH}</div>
           ${[['{бокс}', bx.name], ['{фс}', fmtN(bx.fs)], ['{руб}', fmtN(bx.rub)], ['{деп}', fmtN(bx.dep)]].map(([c, v]) => `<button type="button" class="chip" data-ins="${c}" title="${esc(S.insTip)}"><code>${c}</code><span>→ ${esc(v)}</span></button>`).join('')}
         </div>`;
@@ -1027,6 +1030,7 @@
       }
       const items = draft[tab];
       if (e.target.closest('.add')) { items.push({ text: '' }); paintTabs(); paintList(items.length - 1); return; }
+      if (e.target.closest('.rall')) { if (confirm(S.resetAllTQ)) { SCRIPTS.forEach((x) => { draft[x.id] = defDraft(x.id); }); paintTabs(); paintList(); } return; }
       if (e.target.closest('.rtab')) { if (confirm(S.resetTabQ)) { draft[tab] = defDraft(tab); paintTabs(); paintList(); } return; }
       const card = e.target.closest('.card'); if (!card) return;
       const i = +card.dataset.i;
